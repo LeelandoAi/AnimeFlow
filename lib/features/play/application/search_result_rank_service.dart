@@ -18,6 +18,30 @@ class SearchResultRankService {
 
   final List<_SearchTerm> _terms;
 
+  static final _titleNoisePattern =
+      RegExp(r'[^0-9a-z\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF]+');
+  static final _unicodeRomanSeasonPattern =
+      RegExp(r'[\u2160-\u216B\u2170-\u217B]');
+  static final _latinRomanSeasonPattern = RegExp(
+    r'(?<=[\s\u4E00-\u9FFF])(XII|XI|IX|VIII|VII|VI|IV|III|II|X|V|I)'
+    r'(?=\s*(?:$|[:：~～(（]|第))',
+    caseSensitive: false,
+  );
+  static const _romanSeasonNumbers = {
+    'i': 1,
+    'ii': 2,
+    'iii': 3,
+    'iv': 4,
+    'v': 5,
+    'vi': 6,
+    'vii': 7,
+    'viii': 8,
+    'ix': 9,
+    'x': 10,
+    'xi': 11,
+    'xii': 12,
+  };
+
   /// 在后台 isolate 里完成「匹配度计算 → 排序」。
   ///
   /// 复用构造时预处理的搜索词条与别名，调用时只需提供候选标题。
@@ -141,15 +165,29 @@ class SearchResultRankService {
   ) {
     final terms = <_SearchTerm>[];
     final seen = <String>{};
+    final normalizedSearch = _normalize(searchTerm);
+    final searchProfile = _TitleSeasonProfile.parseNormalized(normalizedSearch);
 
-    for (final text in [searchTerm, ...aliases]) {
-      final normalized = _normalize(text);
+    for (final normalized in [normalizedSearch, ...aliases.map(_normalize)]) {
       if (normalized.isEmpty || !seen.add(normalized)) {
         continue;
       }
+      final profile = normalized == normalizedSearch
+          ? searchProfile
+          : _TitleSeasonProfile.parseNormalized(normalized);
       terms.add(_SearchTerm(
         normalized: normalized,
-        profile: _TitleSeasonProfile.parseNormalized(normalized),
+        // 别名可能省略季数或部分，用主搜索词补齐，避免错误结果借助别名得到高分。
+        profile: _TitleSeasonProfile(
+          baseTitle: profile.baseTitle,
+          markerKind: profile.hasSeasonMarker
+              ? profile.markerKind
+              : searchProfile.markerKind,
+          seasonNumber: profile.hasSeasonMarker
+              ? profile.seasonNumber
+              : searchProfile.seasonNumber,
+          partNumber: profile.partNumber ?? searchProfile.partNumber,
+        ),
       ));
     }
 
@@ -157,8 +195,17 @@ class SearchResultRankService {
   }
 
   static String _normalize(String text) {
-    return text.toLowerCase().replaceAll(RegExp(r'\s+'), '').replaceAll(
-        RegExp(r'[^0-9a-z\u4E00-\u9FFF\u3040-\u309F\u30A0-\u30FF]+'), '');
+    // 在移除标点和空格前识别罗马数字季标，保留其语义及英文单词边界。
+    final withSeasons = text.replaceAllMapped(_unicodeRomanSeasonPattern, (m) {
+      final code = m.group(0)!.codeUnitAt(0);
+      final number = code - (code >= 0x2170 ? 0x2170 : 0x2160) + 1;
+      return '第$number季';
+    }).replaceAllMapped(_latinRomanSeasonPattern, (m) {
+      final number = _romanSeasonNumbers[m.group(1)!.toLowerCase()]!;
+      return '第$number季';
+    });
+    // 评分前统一移除 ~、～、标点及空白，保留文字、数字和已识别的季数。
+    return withSeasons.toLowerCase().replaceAll(_titleNoisePattern, '');
   }
 }
 
@@ -177,13 +224,16 @@ class _TitleSeasonProfile {
     required this.baseTitle,
     required this.markerKind,
     this.seasonNumber,
+    this.partNumber,
   });
 
   static final _leadingNoisePattern = RegExp(
     r'^(?:\d{4}年)?(?:\d{1,2}月)?(?:新番|动画|动漫|tv)',
   );
-  static final _numberedSeasonPattern = RegExp(r'第([一二三四五六七八九十\d]+)[季部]');
-  static final _latinSeasonPattern = RegExp(r'(?:season|part)([1-9]\d*)');
+  static final _numberedSeasonPattern =
+      RegExp(r'第([一二三四五六七八九十\d]+)(?:季|部(?!分))');
+  static final _latinSeasonPattern = RegExp(r'season([1-9]\d*)');
+  static final _partPattern = RegExp(r'第([一二三四五六七八九十\d]+)部分|part([1-9]\d*)');
   static final _qualityNoisePattern = RegExp(
     r'完整版|无修正|中文字幕|高清|超清|抢先版|同步播出|独家|连载|1080[pP]|720[pP]',
   );
@@ -199,6 +249,7 @@ class _TitleSeasonProfile {
   final String baseTitle;
   final _SeasonMarkerKind markerKind;
   final int? seasonNumber;
+  final int? partNumber;
 
   bool get hasSeasonMarker => markerKind != _SeasonMarkerKind.none;
 
@@ -206,8 +257,15 @@ class _TitleSeasonProfile {
     var work = normalized;
     var markerKind = _SeasonMarkerKind.none;
     int? seasonNumber;
+    int? partNumber;
 
     work = work.replaceAll(_leadingNoisePattern, '');
+
+    final partMatch = _partPattern.firstMatch(work);
+    if (partMatch != null) {
+      partNumber = _parseNumberToken(partMatch.group(1) ?? partMatch.group(2)!);
+      work = work.replaceAll(partMatch.group(0)!, '');
+    }
 
     final numberedMatch = _numberedSeasonPattern.firstMatch(work);
     if (numberedMatch != null) {
@@ -240,11 +298,24 @@ class _TitleSeasonProfile {
       baseTitle: work,
       markerKind: markerKind,
       seasonNumber: seasonNumber,
+      partNumber: partNumber,
     );
   }
 
-  /// 搜索词与结果季数/类型对齐系数。
+  /// 搜索词与结果季数、类型及部分编号的对齐系数。
   static double alignmentFactor(
+    _TitleSeasonProfile search,
+    _TitleSeasonProfile result,
+  ) {
+    final partFactor = search.partNumber == result.partNumber
+        ? 1.0
+        : search.partNumber == null || result.partNumber == null
+            ? 0.85
+            : 0.52;
+    return _seasonAlignmentFactor(search, result) * partFactor;
+  }
+
+  static double _seasonAlignmentFactor(
     _TitleSeasonProfile search,
     _TitleSeasonProfile result,
   ) {
