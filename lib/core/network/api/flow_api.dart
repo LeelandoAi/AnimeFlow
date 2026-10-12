@@ -9,6 +9,7 @@ import 'package:anime_flow/core/network/clients/flow_client.dart';
 import 'package:anime_flow/core/network/sse/json_sse_parser.dart';
 import 'package:anime_flow/core/network/sse/sse_connection_status.dart';
 import 'package:anime_flow/shared/models/enums/sort_type.dart';
+import 'package:anime_flow/shared/models/enums/collection_sort.dart';
 import 'package:anime_flow/shared/models/bangumi/actor_item.dart';
 import 'package:anime_flow/shared/models/bangumi/calendar_item.dart';
 import 'package:anime_flow/shared/models/bangumi/character_comments_item.dart';
@@ -1024,6 +1025,7 @@ class FlowApi {
     required int limit,
     required int offset,
     String? keyword,
+    CollectionSort sort = CollectionSort.defaultSort,
   }) async {
     final response = await _client.get(
       AnimeFlowApi.flowUserCollections,
@@ -1033,6 +1035,7 @@ class FlowApi {
         'limit': limit,
         'offset': offset,
         if (keyword != null) 'keyword': keyword,
+        if (sort != CollectionSort.defaultSort) 'sort': sort.apiValue,
       },
       requireFlowToken: true,
     );

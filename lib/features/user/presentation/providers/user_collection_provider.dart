@@ -2,8 +2,10 @@ import 'dart:async';
 
 import 'package:anime_flow/shared/models/flow/collection_update_result.dart';
 import 'package:anime_flow/shared/models/bangumi/user_collections_item.dart';
+import 'package:anime_flow/shared/models/enums/collection_sort.dart';
 import 'package:anime_flow/shared/models/flow/flow_users.dart';
 import 'package:anime_flow/core/network/api/flow_api.dart';
+import 'package:anime_flow/core/settings/app_settings.dart';
 import 'package:anime_flow/features/user/presentation/providers/user_collection_state.dart';
 import 'package:anime_flow/features/user/presentation/providers/user_state_provider.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
@@ -16,6 +18,7 @@ const _pageSize = 20;
 typedef CollectionPageLoader = Future<UserCollectionsItem> Function({
   required int type,
   required int offset,
+  required CollectionSort sort,
   String? keyword,
 });
 
@@ -24,12 +27,13 @@ final collectionCancelProvider = Provider<Future<void> Function(int)>((ref) {
 });
 
 final collectionPageLoaderProvider = Provider<CollectionPageLoader>((ref) {
-  return ({required type, required offset, keyword}) =>
+  return ({required type, required offset, required sort, keyword}) =>
       FlowApi.myCollectionsService(
         type: type,
         limit: _pageSize,
         offset: offset,
         keyword: keyword,
+        sort: sort,
       );
 });
 
@@ -116,8 +120,13 @@ class UserCollections extends _$UserCollections {
     return result;
   }
 
-  Future<void> search(int type, String keyword) async {
+  Future<void> applyFilters(
+    int type, {
+    required String keyword,
+    required CollectionSort sort,
+  }) async {
     final normalizedKeyword = keyword.trim();
+    final session = _session;
     state = state.updateTab(
       type,
       (current) => current.copyWith(
@@ -126,6 +135,7 @@ class UserCollections extends _$UserCollections {
         isRefreshing: false,
         isLoadingMore: false,
         keyword: normalizedKeyword.isEmpty ? null : normalizedKeyword,
+        sort: sort,
         requestVersion: current.requestVersion + 1,
         clearData: true,
         clearHasMore: true,
@@ -134,6 +144,13 @@ class UserCollections extends _$UserCollections {
         clearLoadMoreErrorMessage: true,
       ),
     );
+    final requestVersion = state.tabState(type).requestVersion;
+    await AppSettings.setCollectionSort(type, sort);
+    if (!ref.mounted ||
+        session != _session ||
+        state.tabState(type).requestVersion != requestVersion) {
+      return;
+    }
     await _load(type);
   }
 
@@ -152,12 +169,14 @@ class UserCollections extends _$UserCollections {
   Future<UserCollectionsItem> _fetchPage({
     required int type,
     required int offset,
+    required CollectionSort sort,
     String? keyword,
   }) {
     return ref.read(collectionPageLoaderProvider)(
       type: type,
       offset: offset,
       keyword: keyword,
+      sort: sort,
     );
   }
 
@@ -166,7 +185,29 @@ class UserCollections extends _$UserCollections {
     bool loadMore = false,
     bool refresh = false,
   }) async {
-    final tab = state.tabState(type);
+    var tab = state.tabState(type);
+    final sort = AppSettings.getCollectionSort(type);
+    if (tab.sort != sort) {
+      // 持久化排序变化时从第一页重载，避免混合不同排序的分页缓存。
+      state = state.updateTab(
+        type,
+        (current) => current.copyWith(
+          sort: sort,
+          offset: 0,
+          requestVersion: current.requestVersion + 1,
+          isInitialLoading: false,
+          isRefreshing: false,
+          isLoadingMore: false,
+          clearData: true,
+          clearHasMore: true,
+          clearInitialErrorMessage: true,
+          clearLoadMoreErrorMessage: true,
+        ),
+      );
+      tab = state.tabState(type);
+      loadMore = false;
+      refresh = false;
+    }
     final session = _session;
     final requestVersion = tab.requestVersion;
     bool isCurrentRequest() =>
@@ -210,6 +251,7 @@ class UserCollections extends _$UserCollections {
         type: type,
         offset: offset,
         keyword: keyword,
+        sort: sort,
       );
       if (!isCurrentRequest()) {
         return false;

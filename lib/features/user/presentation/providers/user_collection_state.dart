@@ -1,4 +1,5 @@
 import 'package:anime_flow/shared/models/bangumi/user_collections_item.dart';
+import 'package:anime_flow/shared/models/enums/collection_sort.dart';
 
 /// 单个收藏 Tab 的分页与加载状态。
 class UserCollectionTabState {
@@ -14,6 +15,7 @@ class UserCollectionTabState {
   final String? initialErrorMessage;
   final String? loadMoreErrorMessage;
   final String? keyword;
+  final CollectionSort sort;
   final int requestVersion;
 
   const UserCollectionTabState({
@@ -27,6 +29,7 @@ class UserCollectionTabState {
     this.initialErrorMessage,
     this.loadMoreErrorMessage,
     this.keyword,
+    this.sort = CollectionSort.defaultSort,
     this.requestVersion = 0,
   });
 
@@ -45,6 +48,7 @@ class UserCollectionTabState {
     String? initialErrorMessage,
     String? loadMoreErrorMessage,
     String? keyword,
+    CollectionSort? sort,
     int? requestVersion,
     bool clearData = false,
     bool clearHasMore = false,
@@ -67,6 +71,7 @@ class UserCollectionTabState {
           ? null
           : (loadMoreErrorMessage ?? this.loadMoreErrorMessage),
       keyword: clearKeyword ? null : (keyword ?? this.keyword),
+      sort: sort ?? this.sort,
       requestVersion: requestVersion ?? this.requestVersion,
     );
   }

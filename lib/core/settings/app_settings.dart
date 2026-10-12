@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:anime_flow/core/constants/storage_key.dart';
 import 'package:anime_flow/core/settings/ech_image_route.dart';
 import 'package:anime_flow/core/settings/storage.dart';
+import 'package:anime_flow/shared/models/enums/collection_sort.dart';
 
 /// 应用持久化配置的统一访问入口。
 abstract final class AppSettings {
@@ -15,6 +16,18 @@ abstract final class AppSettings {
       Storage.setting.put(key, value);
 
   static Future<void> deleteSetting(String key) => Storage.setting.delete(key);
+
+  /// 每种收藏类型分别保存排序；旧版本用户保持默认排序。
+  static CollectionSort getCollectionSort(int type) {
+    final value = getSetting<String>('${SettingKey.collectionSort}_$type');
+    return CollectionSort.values.firstWhere(
+      (sort) => sort.apiValue == value,
+      orElse: () => CollectionSort.defaultSort,
+    );
+  }
+
+  static Future<void> setCollectionSort(int type, CollectionSort sort) =>
+      setSetting('${SettingKey.collectionSort}_$type', sort.apiValue);
 
   static const defaultAutoUpdate = true;
   static const defaultDownloadDanmaku = true;

@@ -681,6 +681,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get searchCollection => 'Search collection';
 
   @override
+  String get filterCollection => 'Filter collections';
+
+  @override
+  String get collectionSortLabel => 'Sort by';
+
+  @override
+  String get collectionSortWatch => 'Recently watched';
+
+  @override
+  String get resetCollectionFilters => 'Reset';
+
+  @override
   String get collectionKeywordHint => 'Enter collection keywords';
 
   @override

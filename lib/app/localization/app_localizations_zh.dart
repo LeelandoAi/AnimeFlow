@@ -671,6 +671,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String get searchCollection => '搜索收藏';
 
   @override
+  String get filterCollection => '筛选收藏';
+
+  @override
+  String get collectionSortLabel => '排序方式';
+
+  @override
+  String get collectionSortWatch => '最近观看';
+
+  @override
+  String get resetCollectionFilters => '重置';
+
+  @override
   String get collectionKeywordHint => '输入收藏关键词';
 
   @override
@@ -3048,6 +3060,18 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get searchCollection => '搜索收藏';
+
+  @override
+  String get filterCollection => '筛选收藏';
+
+  @override
+  String get collectionSortLabel => '排序方式';
+
+  @override
+  String get collectionSortWatch => '最近观看';
+
+  @override
+  String get resetCollectionFilters => '重置';
 
   @override
   String get collectionKeywordHint => '输入收藏关键词';
@@ -5428,6 +5452,18 @@ class AppLocalizationsZhHantHk extends AppLocalizationsZh {
   String get searchCollection => '搜尋收藏';
 
   @override
+  String get filterCollection => '篩選收藏';
+
+  @override
+  String get collectionSortLabel => '排序方式';
+
+  @override
+  String get collectionSortWatch => '最近觀看';
+
+  @override
+  String get resetCollectionFilters => '重設';
+
+  @override
   String get collectionKeywordHint => '輸入收藏關鍵字';
 
   @override
@@ -7805,6 +7841,18 @@ class AppLocalizationsZhHantTw extends AppLocalizationsZh {
 
   @override
   String get searchCollection => '搜尋收藏';
+
+  @override
+  String get filterCollection => '篩選收藏';
+
+  @override
+  String get collectionSortLabel => '排序方式';
+
+  @override
+  String get collectionSortWatch => '最近觀看';
+
+  @override
+  String get resetCollectionFilters => '重設';
 
   @override
   String get collectionKeywordHint => '輸入收藏關鍵字';

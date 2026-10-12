@@ -1,16 +1,19 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:anime_flow/core/auth/models/flow_token.dart';
 import 'package:anime_flow/core/auth/repository/token_repository.dart';
 import 'package:anime_flow/core/constants/constants.dart';
+import 'package:anime_flow/core/settings/storage.dart';
 import 'package:anime_flow/core/network/clients/flow_client.dart';
 import 'package:anime_flow/core/network/core/network_exception.dart';
 import 'package:anime_flow/core/network/interceptors/flow_refresh_token_interceptor.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:hive_ce/hive.dart';
 import 'package:anime_flow/features/auth/application/token_providers.dart';
 import 'package:anime_flow/features/user/presentation/providers/user_state_provider.dart';
 import 'package:anime_flow/features/user/presentation/providers/user_collection_provider.dart';
@@ -83,6 +86,19 @@ class CachedUserInfo extends CurrentUserInfo {
 }
 
 void main() {
+  late Directory settingsDirectory;
+  setUpAll(() async {
+    settingsDirectory =
+        await Directory.systemTemp.createTemp('refresh_collection_test_');
+    Hive.init(settingsDirectory.path);
+    Storage.setting =
+        await Hive.openBox<dynamic>('refresh_collection_settings');
+  });
+  tearDownAll(() async {
+    await Hive.close();
+    await settingsDirectory.delete(recursive: true);
+  });
+
   tearDown(() {
     FlowRefreshTokenInterceptor.onSessionExpired = null;
     FlowRefreshTokenInterceptor.onTokenRefreshed = null;
@@ -284,7 +300,7 @@ void main() {
       flowTokenRepositoryProvider.overrideWithValue(repository),
       currentUserInfoProvider.overrideWith(CachedUserInfo.new),
       collectionPageLoaderProvider.overrideWithValue(
-        ({required type, required offset, keyword}) async =>
+        ({required type, required offset, required sort, keyword}) async =>
             UserCollectionsItem(data: [], total: 0),
       ),
     ]);

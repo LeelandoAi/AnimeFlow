@@ -3,19 +3,21 @@ import 'collection_sync_pending_banner.dart';
 import 'dart:ui';
 
 import 'package:anime_flow/shared/models/flow/flow_users.dart';
+import 'package:anime_flow/shared/models/enums/collection_sort.dart';
 import 'package:anime_flow/features/user/presentation/providers/user_collection_provider.dart';
 import 'package:anime_flow/features/user/presentation/providers/user_collection_state.dart';
 import 'package:anime_flow/features/user/presentation/providers/account_provider.dart';
 import 'package:anime_flow/app/router/app_router.dart';
 import 'package:anime_flow/core/utils/format_time_util.dart';
 import 'package:anime_flow/core/utils/system_util.dart';
+import 'package:anime_flow/core/settings/app_settings.dart';
 import 'package:anime_flow/shared/widgets/animation_network_image.dart';
 import 'package:anime_flow/shared/widgets/drop_down_menu.dart';
 import 'package:anime_flow/app/localization/app_localizations.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'collection_search_dialog.dart';
+import 'collection_filter_dialog.dart';
 import 'collection_tab_view.dart';
 
 enum _LoginOverflowAction { settings, playRecord, downloads, logout }
@@ -57,30 +59,30 @@ class _UserViewState extends ConsumerState<UserView>
     await _refreshIndicatorKeys[_currentType]?.currentState?.show();
   }
 
-  Future<void> _showCollectionSearchDialog() async {
+  Future<void> _showCollectionFilterDialog() async {
     final currentType = _currentType;
-    final keyword = await showDialog<String>(
+    final tab = ref.read(userCollectionsProvider).tabState(currentType);
+    final filters = await showDialog<CollectionFilterResult>(
       context: context,
       useRootNavigator: false,
-      builder: (dialogContext) => CollectionSearchDialog(
-        initialKeyword:
-            ref.read(userCollectionsProvider).tabState(currentType).keyword ??
-                '',
+      builder: (dialogContext) => CollectionFilterDialog(
+        initialKeyword: tab.keyword ?? '',
+        initialSort: AppSettings.getCollectionSort(currentType),
       ),
     );
-    if (keyword == null || !mounted) {
+    if (filters == null || !mounted) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
         return;
       }
-      ref.read(userCollectionsProvider.notifier).search(currentType, keyword);
+      ref.read(userCollectionsProvider.notifier).applyFilters(
+            currentType,
+            keyword: filters.keyword,
+            sort: filters.sort,
+          );
     });
-  }
-
-  Future<void> _clearCurrentTypeSearch() async {
-    await ref.read(userCollectionsProvider.notifier).search(_currentType, '');
   }
 
   /// 切换用户信息显示状态
@@ -252,27 +254,35 @@ class _UserViewState extends ConsumerState<UserView>
       ),
       floatingActionButton: Consumer(
         builder: (context, ref, _) {
-          final keyword = ref.watch(
+          final (keyword, sort) = ref.watch(
             userCollectionsProvider.select(
-              (state) => state.tabState(_currentType).keyword,
+              (state) {
+                final tab = state.tabState(_currentType);
+                return (tab.keyword, tab.sort);
+              },
             ),
           );
-          if (keyword == null || keyword.isEmpty) {
+          final l10n = AppLocalizations.of(context);
+          if ((keyword == null || keyword.isEmpty) &&
+              sort == CollectionSort.defaultSort) {
             return FloatingActionButton(
-              tooltip: AppLocalizations.of(context).searchCollection,
-              onPressed: _showCollectionSearchDialog,
-              child: const Icon(Icons.search),
+              tooltip: l10n.filterCollection,
+              onPressed: _showCollectionFilterDialog,
+              child: const Icon(Icons.tune),
             );
           }
 
           return FloatingActionButton.extended(
-            tooltip: AppLocalizations.of(context).clearSearch,
-            onPressed: _clearCurrentTypeSearch,
-            icon: const Icon(Icons.close),
+            tooltip: l10n.filterCollection,
+            onPressed: _showCollectionFilterDialog,
+            icon: const Icon(Icons.tune),
             label: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 160),
               child: Text(
-                keyword,
+                [
+                  if (keyword != null && keyword.isNotEmpty) keyword,
+                  if (sort == CollectionSort.watch) l10n.collectionSortWatch,
+                ].join(' · '),
                 overflow: TextOverflow.ellipsis,
               ),
             ),

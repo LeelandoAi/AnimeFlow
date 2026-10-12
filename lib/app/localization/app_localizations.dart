@@ -1316,6 +1316,30 @@ abstract class AppLocalizations {
   /// **'搜索收藏'**
   String get searchCollection;
 
+  /// No description provided for @filterCollection.
+  ///
+  /// In zh_Hans, this message translates to:
+  /// **'筛选收藏'**
+  String get filterCollection;
+
+  /// No description provided for @collectionSortLabel.
+  ///
+  /// In zh_Hans, this message translates to:
+  /// **'排序方式'**
+  String get collectionSortLabel;
+
+  /// No description provided for @collectionSortWatch.
+  ///
+  /// In zh_Hans, this message translates to:
+  /// **'最近观看'**
+  String get collectionSortWatch;
+
+  /// No description provided for @resetCollectionFilters.
+  ///
+  /// In zh_Hans, this message translates to:
+  /// **'重置'**
+  String get resetCollectionFilters;
+
   /// No description provided for @collectionKeywordHint.
   ///
   /// In zh_Hans, this message translates to:

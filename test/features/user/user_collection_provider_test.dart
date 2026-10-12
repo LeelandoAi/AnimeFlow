@@ -1,13 +1,19 @@
 import 'package:anime_flow/shared/models/flow/collection_update_result.dart';
 import 'dart:async';
+import 'dart:io';
 
+import 'package:anime_flow/core/constants/storage_key.dart';
+import 'package:anime_flow/core/settings/app_settings.dart';
+import 'package:anime_flow/core/settings/storage.dart';
 import 'package:anime_flow/features/user/presentation/providers/user_collection_provider.dart';
 import 'package:anime_flow/features/user/presentation/providers/user_collection_state.dart';
 import 'package:anime_flow/features/user/presentation/providers/user_state_provider.dart';
 import 'package:anime_flow/shared/models/bangumi/user_collections_item.dart';
+import 'package:anime_flow/shared/models/enums/collection_sort.dart';
 import 'package:anime_flow/shared/models/flow/flow_users.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive_ce/hive.dart';
 
 UserCollectionData _item(int type) => UserCollectionData.fromJson({
       'id': 42,
@@ -35,6 +41,163 @@ class _UserInfo extends CurrentUserInfo {
 }
 
 void main() {
+  late Directory settingsDirectory;
+  setUpAll(() async {
+    settingsDirectory =
+        await Directory.systemTemp.createTemp('collection_sort_test_');
+    Hive.init(settingsDirectory.path);
+    Storage.setting = await Hive.openBox<dynamic>('collection_sort_settings');
+  });
+  setUp(() => Storage.setting.clear());
+  tearDownAll(() async {
+    await Hive.close();
+    await settingsDirectory.delete(recursive: true);
+  });
+
+  test('saved sort is restored per category by a new provider and after reset',
+      () async {
+    final requests = <(int, String?, CollectionSort)>[];
+    Future<UserCollectionsItem> load({
+      required int type,
+      required int offset,
+      required CollectionSort sort,
+      String? keyword,
+    }) async {
+      requests.add((type, keyword, sort));
+      return UserCollectionsItem(data: [], total: 0);
+    }
+
+    final original = ProviderContainer(overrides: [
+      collectionPageLoaderProvider.overrideWithValue(load),
+    ]);
+    final notifier = original.read(userCollectionsProvider.notifier);
+    await notifier.applyFilters(1,
+        keyword: 'Example', sort: CollectionSort.defaultSort);
+    await notifier.applyFilters(3, keyword: '', sort: CollectionSort.watch);
+    await notifier.applyFilters(5, keyword: '', sort: CollectionSort.watch);
+    await Storage.setting.flush();
+    expect(Storage.setting.get('${SettingKey.collectionSort}_1'), 'default');
+    expect(Storage.setting.get('${SettingKey.collectionSort}_3'), 'watch');
+    expect(Storage.setting.get('${SettingKey.collectionSort}_5'), 'watch');
+    original.dispose();
+
+    requests.clear();
+    final restarted = ProviderContainer(overrides: [
+      collectionPageLoaderProvider.overrideWithValue(load),
+    ]);
+    addTearDown(restarted.dispose);
+    final restored = restarted.read(userCollectionsProvider.notifier);
+    await restored.loadInitial(1);
+    await restored.loadInitial(3);
+    await restored.loadInitial(5);
+    expect(requests, [
+      (1, null, CollectionSort.defaultSort),
+      (3, null, CollectionSort.watch),
+      (5, null, CollectionSort.watch),
+    ]);
+    expect(restarted.read(userCollectionsProvider).tabState(3).sort,
+        CollectionSort.watch);
+
+    restored.reset();
+    await restored.loadInitial(3);
+    expect(requests.last, (3, null, CollectionSort.watch));
+    await restored.applyFilters(3,
+        keyword: '', sort: CollectionSort.defaultSort);
+    expect(AppSettings.getCollectionSort(3), CollectionSort.defaultSort);
+    expect(AppSettings.getCollectionSort(5), CollectionSort.watch);
+  });
+
+  test('missing or invalid saved sorts fall back to default', () async {
+    expect(AppSettings.getCollectionSort(1), CollectionSort.defaultSort);
+    await Storage.setting.put('${SettingKey.collectionSort}_2', 'unknown');
+    await Storage.setting.put('${SettingKey.collectionSort}_3', 1);
+    expect(AppSettings.getCollectionSort(2), CollectionSort.defaultSort);
+    expect(AppSettings.getCollectionSort(3), CollectionSort.defaultSort);
+  });
+
+  test('filters are retained for pagination, refresh and each category',
+      () async {
+    final requests = <(int, int, String?, CollectionSort)>[];
+    final container = ProviderContainer(overrides: [
+      collectionPageLoaderProvider.overrideWithValue(
+        ({required type, required offset, required sort, keyword}) async {
+          requests.add((type, offset, keyword, sort));
+          return UserCollectionsItem(
+            data: List.generate(20, (index) {
+              final json = _item(type).toJson();
+              json['id'] = offset + index;
+              return UserCollectionData.fromJson(json);
+            }),
+            total: 40,
+          );
+        },
+      ),
+    ]);
+    addTearDown(container.dispose);
+    final notifier = container.read(userCollectionsProvider.notifier);
+
+    await notifier.applyFilters(3,
+        keyword: ' Example ', sort: CollectionSort.watch);
+    await notifier.loadMore(3);
+    await notifier.refresh(3);
+    await notifier.loadInitial(1);
+
+    expect(requests, [
+      (3, 0, 'Example', CollectionSort.watch),
+      (3, 20, 'Example', CollectionSort.watch),
+      (3, 0, 'Example', CollectionSort.watch),
+      (1, 0, null, CollectionSort.defaultSort),
+    ]);
+    expect(container.read(userCollectionsProvider).tabState(3).sort,
+        CollectionSort.watch);
+
+    await notifier.applyFilters(3, keyword: '', sort: CollectionSort.watch);
+    expect(requests.last, (3, 0, null, CollectionSort.watch));
+    await notifier.applyFilters(3,
+        keyword: '', sort: CollectionSort.defaultSort);
+    expect(requests.last, (3, 0, null, CollectionSort.defaultSort));
+    expect(container.read(userCollectionsProvider).tabState(3).keyword, isNull);
+    expect(container.read(userCollectionsProvider).tabState(1).offset, 20);
+  });
+
+  test('changing sort discards a pending page from the previous filters',
+      () async {
+    final oldPage = Completer<UserCollectionsItem>();
+    final newPage = Completer<UserCollectionsItem>();
+    final newRequestStarted = Completer<void>();
+    final container = ProviderContainer(overrides: [
+      collectionPageLoaderProvider.overrideWithValue(
+        ({required type, required offset, required sort, keyword}) {
+          if (sort == CollectionSort.watch) {
+            newRequestStarted.complete();
+            return newPage.future;
+          }
+          return oldPage.future;
+        },
+      ),
+    ]);
+    addTearDown(container.dispose);
+    final notifier = container.read(userCollectionsProvider.notifier);
+    final oldRequest = notifier.loadInitial(3);
+    final newRequest =
+        notifier.applyFilters(3, keyword: 'new', sort: CollectionSort.watch);
+    await newRequestStarted.future;
+
+    oldPage.complete(UserCollectionsItem(data: [_item(3)], total: 1));
+    await oldRequest;
+    final pending = container.read(userCollectionsProvider).tabState(3);
+    expect(pending.data, isNull);
+    expect(pending.isInitialLoading, isTrue);
+    expect(pending.sort, CollectionSort.watch);
+    expect(pending.keyword, 'new');
+
+    newPage.complete(UserCollectionsItem(data: [], total: 0));
+    await newRequest;
+    expect(container.read(userCollectionsProvider).tabState(3).data!.data,
+        isEmpty);
+    expect(container.read(userCollectionsProvider).tabState(3).isBusy, isFalse);
+  });
+
   test('cancelling uses DELETE path and removes the local collection',
       () async {
     final cancelledIds = <int>[];
@@ -107,7 +270,7 @@ void main() {
       userCollectionsProvider.overrideWith(_Collections.new),
       collectionCancelProvider.overrideWithValue((_) async {}),
       collectionPageLoaderProvider.overrideWithValue(
-        ({required type, required offset, keyword}) {
+        ({required type, required offset, required sort, keyword}) {
           requests++;
           return requests == 1
               ? oldPage.future
@@ -161,7 +324,7 @@ void main() {
             remoteSyncStatus: CollectionRemoteSyncStatus.synced);
       }),
       collectionPageLoaderProvider.overrideWithValue(
-        ({required type, required offset, keyword}) async =>
+        ({required type, required offset, required sort, keyword}) async =>
             UserCollectionsItem(data: [_item(1)], total: 1),
       ),
     ]);
@@ -180,7 +343,7 @@ void main() {
       var requests = 0;
       final container = ProviderContainer(overrides: [
         collectionPageLoaderProvider.overrideWithValue(
-          ({required type, required offset, keyword}) =>
+          ({required type, required offset, required sort, keyword}) =>
               requests++ == 0 ? oldPage.future : newPage.future,
         ),
       ]);
@@ -212,7 +375,8 @@ void main() {
     final page = Completer<UserCollectionsItem>();
     final container = ProviderContainer(overrides: [
       collectionPageLoaderProvider.overrideWithValue(
-        ({required type, required offset, keyword}) => page.future,
+        ({required type, required offset, required sort, keyword}) =>
+            page.future,
       ),
     ]);
     final request =
