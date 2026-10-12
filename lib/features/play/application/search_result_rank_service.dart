@@ -3,146 +3,96 @@ import 'dart:math';
 
 import 'package:anime_flow/core/utils/utils.dart';
 
-/// 候选标题的打分排序结果。
+/// 候选标题的匹配度排序结果。
 ///
-/// [indices] 是按得分降序排列的下标（对应入参 `names`），
+/// [indices] 是按匹配度降序排列的下标（对应入参 `names`），
 /// [matchRatios] 与入参一一对应。
 typedef RankedCandidates = ({List<int> indices, List<double> matchRatios});
 
-/// 根据搜索词条与别名对检索结果进行权重排序。
+/// 根据搜索词条与别名对检索结果进行匹配度排序，名称与别名同等对待。
 class SearchResultRankService {
   SearchResultRankService({
     required String searchTerm,
     List<String> aliases = const [],
-  }) : _weightedTerms = _buildWeightedTerms(searchTerm, aliases);
+  }) : _terms = _buildTerms(searchTerm, aliases);
 
-  final List<_WeightedTerm> _weightedTerms;
+  final List<_SearchTerm> _terms;
 
-  static const _searchTermWeight = 100.0;
-  static const _aliasWeight = 100.0;
-
-  /// 在后台 isolate 里完成「打分 → 排序」。
+  /// 在后台 isolate 里完成「匹配度计算 → 排序」。
   ///
-  /// 刻意做成**静态方法**：闭包只捕获入参，不会把调用方实例带进 isolate 消息。
-  /// 若在实例方法里直接 `Isolate.run`，同一个方法的上下文会包含 `this`，
-  /// 而 `this` 往往持着 `LiggLogger`（内部 `Logger` 含不可发送的 `Future`），
-  /// 触发 `Illegal argument in isolate message: object is unsendable`。
-  static Future<RankedCandidates> rankInIsolate({
-    required String searchTerm,
-    required List<String> aliases,
+  /// 复用构造时预处理的搜索词条与别名，调用时只需提供候选标题。
+  Future<RankedCandidates> rankInIsolate({
     required List<String> names,
   }) {
     return Isolate.run(() {
-      final service = SearchResultRankService(
-        searchTerm: searchTerm,
-        aliases: aliases,
-      );
-      final scores = service.computeScoresBatch(names);
-      final matchRatios = names
-          .map((name) => service.computeMatchRatio(name))
-          .toList(growable: false);
+      final matchRatios =
+          names.map((name) => computeMatchRatio(name)).toList(growable: false);
       final indices = List.generate(names.length, (i) => i, growable: false);
       indices.sort((a, b) {
-        final cmp = scores[b].compareTo(scores[a]);
+        final cmp = matchRatios[b].compareTo(matchRatios[a]);
         return cmp != 0 ? cmp : a.compareTo(b);
       });
       return (indices: indices, matchRatios: matchRatios);
     });
   }
 
-  /// 批量计算一组标题的得分，顺序与 [names] 一一对应。
-  /// 设计为可安全传入 isolate 使用。
-  List<double> computeScoresBatch(List<String> names) {
-    return [for (final name in names) computeScore(name)];
-  }
-
-  /// 返回 0~1 的匹配度
+  /// 返回与名称及别名的最高匹配度，范围为 0~1。
   double computeMatchRatio(String itemName) {
-    if (_weightedTerms.isEmpty || itemName.isEmpty) {
+    if (_terms.isEmpty || itemName.isEmpty) {
       return 0;
     }
 
     final normalizedItem = _normalize(itemName);
-    final itemProfile = _TitleSeasonProfile.parse(itemName);
+    final itemProfile = _TitleSeasonProfile.parseNormalized(normalizedItem);
     var maxRatio = 0.0;
 
-    for (final term in _weightedTerms) {
-      final score = _pairScore(
+    for (final term in _terms) {
+      final ratio = _pairMatchRatio(
         normalizedItem,
         term.normalized,
-        term.weight,
         itemProfile: itemProfile,
         termProfile: term.profile,
       );
-      maxRatio = max(maxRatio, score / term.weight);
+      maxRatio = max(maxRatio, ratio);
+      if (maxRatio >= 1) break;
     }
 
     return maxRatio.clamp(0.0, 1.0);
   }
 
-  /// 计算单条结果与所有词条的最高匹配得分。
-  double computeScore(String itemName) {
-    if (_weightedTerms.isEmpty || itemName.isEmpty) {
-      return 0;
-    }
-
-    final normalizedItem = _normalize(itemName);
-    final itemProfile = _TitleSeasonProfile.parse(itemName);
-    var maxScore = 0.0;
-
-    for (final term in _weightedTerms) {
-      final score = _pairScore(
-        normalizedItem,
-        term.normalized,
-        term.weight,
-        itemProfile: itemProfile,
-        termProfile: term.profile,
-      );
-      if (score > maxScore) {
-        maxScore = score;
-        // 已达满分（seasonFactor=1 时 score==weight），无需检查剩余词条
-        if (maxScore >= term.weight) break;
-      }
-    }
-
-    return maxScore;
-  }
-
-  double _pairScore(
+  double _pairMatchRatio(
     String item,
-    String term,
-    double weight, {
+    String term, {
     required _TitleSeasonProfile itemProfile,
     required _TitleSeasonProfile termProfile,
   }) {
     final seasonFactor =
         _TitleSeasonProfile.alignmentFactor(termProfile, itemProfile);
 
-    late final double rawScore;
+    late final double rawRatio;
     if (item == term) {
-      rawScore = weight;
+      rawRatio = 1;
     } else if (item.contains(term)) {
-      rawScore =
-          weight * (0.85 + 0.13 * (term.length / item.length).clamp(0.0, 1.0));
+      rawRatio = 0.85 + 0.13 * (term.length / item.length).clamp(0.0, 1.0);
     } else if (term.contains(item)) {
-      rawScore = weight * 0.7 * (item.length / term.length).clamp(0.5, 1.0);
+      rawRatio = 0.7 * (item.length / term.length).clamp(0.5, 1.0);
     } else if (itemProfile.baseTitle.isNotEmpty &&
         termProfile.baseTitle.isNotEmpty &&
         itemProfile.baseTitle == termProfile.baseTitle) {
-      rawScore = weight * 0.92;
+      rawRatio = 0.92;
     } else {
       final windowSimilarity = _bestWindowSimilarity(item, term);
       if (windowSimilarity >= 0.75) {
-        rawScore = weight * windowSimilarity * 0.9;
+        rawRatio = windowSimilarity * 0.9;
       } else {
         final charCoverage = _orderedCharCoverage(item, term);
-        rawScore = charCoverage >= 0.8
-            ? weight * charCoverage * 0.82
-            : weight * Utils.calculateSimilarity(item, term);
+        rawRatio = charCoverage >= 0.8
+            ? charCoverage * 0.82
+            : Utils.calculateSimilarity(item, term);
       }
     }
 
-    return rawScore * seasonFactor;
+    return rawRatio * seasonFactor;
   }
 
   /// 在较长标题中寻找与词条最相似的片段，避免季数/标签稀释整串相似度。
@@ -185,25 +135,22 @@ class SearchResultRankService {
     return termIndex / term.length;
   }
 
-  static List<_WeightedTerm> _buildWeightedTerms(
+  static List<_SearchTerm> _buildTerms(
     String searchTerm,
     List<String> aliases,
   ) {
-    final terms = <_WeightedTerm>[];
+    final terms = <_SearchTerm>[];
     final seen = <String>{};
 
-    void addTerm(String text, double weight) {
+    for (final text in [searchTerm, ...aliases]) {
       final normalized = _normalize(text);
-      if (normalized.isEmpty || seen.contains(normalized)) {
-        return;
+      if (normalized.isEmpty || !seen.add(normalized)) {
+        continue;
       }
-      seen.add(normalized);
-      terms.add(_WeightedTerm(text: text, weight: weight));
-    }
-
-    addTerm(searchTerm, _searchTermWeight);
-    for (final alias in aliases) {
-      addTerm(alias, _aliasWeight);
+      terms.add(_SearchTerm(
+        normalized: normalized,
+        profile: _TitleSeasonProfile.parseNormalized(normalized),
+      ));
     }
 
     return terms;
@@ -255,8 +202,8 @@ class _TitleSeasonProfile {
 
   bool get hasSeasonMarker => markerKind != _SeasonMarkerKind.none;
 
-  static _TitleSeasonProfile parse(String text) {
-    var work = SearchResultRankService._normalize(text);
+  static _TitleSeasonProfile parseNormalized(String normalized) {
+    var work = normalized;
     var markerKind = _SeasonMarkerKind.none;
     int? seasonNumber;
 
@@ -383,15 +330,12 @@ class _TitleSeasonProfile {
   }
 }
 
-class _WeightedTerm {
-  _WeightedTerm({
-    required this.text,
-    required this.weight,
-  })  : normalized = SearchResultRankService._normalize(text),
-        profile = _TitleSeasonProfile.parse(text);
+class _SearchTerm {
+  const _SearchTerm({
+    required this.normalized,
+    required this.profile,
+  });
 
-  final String text;
   final String normalized;
   final _TitleSeasonProfile profile;
-  final double weight;
 }

@@ -395,13 +395,11 @@ class VideoSourceNotifier extends _$VideoSourceNotifier {
 
       final names =
           rawSearchList.map((item) => item.name).toList(growable: false);
-      // 打分排序放在 SearchResultRankService 的静态方法里执行：
-      // 直接在实例方法里 Isolate.run 会把 notifier（含 Logger）带进 isolate 消息。
-      final sortedResult = await SearchResultRankService.rankInIsolate(
+      final rankService = SearchResultRankService(
         searchTerm: keyword,
         aliases: aliases,
-        names: names,
       );
+      final sortedResult = await rankService.rankInIsolate(names: names);
       if (!ref.mounted) return;
 
       final searchEntries = sortedResult.indices
