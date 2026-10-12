@@ -37,12 +37,15 @@ class UserCollectionData {
   final bool nsfw;
   final ImageFiveItem images;
   final UserCollectionInterest interest;
+
   /// 正片总集数；0 表示本地未收录该条目的剧集信息。
   final int totalEpisodes;
+
   /// 当前用户观看到第几集，已按正片集数封顶。
   final int watchedEpisode;
   /// 连载中番剧的下一集播出日期（yyyy-MM-dd）。
   final String? nextEpisodeAirDate;
+  final CollectionNextEpisode? nextEpisode;
 
   UserCollectionData({
     required this.id,
@@ -58,6 +61,7 @@ class UserCollectionData {
     this.totalEpisodes = 0,
     this.watchedEpisode = 0,
     this.nextEpisodeAirDate,
+    this.nextEpisode,
   });
 
   UserCollectionData.fromJson(Map<String, dynamic> json)
@@ -73,7 +77,11 @@ class UserCollectionData {
         interest = UserCollectionInterest.fromJson(json['interest']),
         totalEpisodes = json['totalEpisodes'] ?? 0,
         watchedEpisode = json['watchedEpisode'] ?? 0,
-        nextEpisodeAirDate = json['nextEpisodeAirDate'] as String?;
+        nextEpisodeAirDate = json['nextEpisodeAirDate'] as String?,
+        nextEpisode = json['nextEpisode'] is Map
+            ? CollectionNextEpisode.fromJson(
+                Map<String, dynamic>.from(json['nextEpisode'] as Map))
+            : null;
 
   factory UserCollectionData.fromSubject(SubjectsInfoItem subject) {
     final interest = subject.interest;
@@ -116,10 +124,27 @@ class UserCollectionData {
       'images': images.toJson(),
       'totalEpisodes': totalEpisodes,
       'watchedEpisode': watchedEpisode,
-      'nextEpisodeAirDate': nextEpisodeAirDate,
+      if (nextEpisodeAirDate != null) 'nextEpisodeAirDate': nextEpisodeAirDate,
+      if (nextEpisode != null) 'nextEpisode': nextEpisode?.toJson(),
       'interest': interest.toJson(),
     };
   }
+}
+
+class CollectionNextEpisode {
+  final int? sort;
+  final String? airdate;
+
+  CollectionNextEpisode({this.sort, this.airdate});
+
+  CollectionNextEpisode.fromJson(Map<String, dynamic> json)
+      : sort = (json['sort'] as num?)?.toInt(),
+        airdate = json['airdate'] as String?;
+
+  Map<String, dynamic> toJson() => {
+        if (sort != null) 'sort': sort,
+        if (airdate != null) 'airdate': airdate,
+      };
 }
 
 class UserCollectionInterest {

@@ -66,6 +66,32 @@ class _PagedCollections extends UserCollections {
   }
 }
 
+class _EpisodeCollections extends UserCollections {
+  final Map<String, dynamic> episodeData;
+
+  _EpisodeCollections(this.episodeData);
+
+  @override
+  UserCollectionsState build() => UserCollectionsState(tabs: {
+        1: UserCollectionTabState(
+          data: UserCollectionsItem(data: [
+            UserCollectionData.fromJson({
+              'id': 42,
+              'name': 'Example',
+              'type': 2,
+              'rating': <String, dynamic>{},
+              'images': <String, dynamic>{},
+              'interest': {'id': 42, 'type': 1, 'updatedAt': 1},
+              'totalEpisodes': 12,
+              'watchedEpisode': 5,
+              ...episodeData,
+            })
+          ], total: 1),
+          hasMore: false,
+        ),
+      });
+}
+
 Widget _page(UserCollections collections) => ProviderScope(
       overrides: [userCollectionsProvider.overrideWith(() => collections)],
       child: MaterialApp(
@@ -108,6 +134,69 @@ FixedScrollMetrics _metrics(AxisDirection direction) => FixedScrollMetrics(
     );
 
 void main() {
+  final date = '${DateTime.now().year}-10-15';
+  final episodeCases = <String, (Map<String, dynamic>, String)>{
+    'new response': (
+      {
+        'nextEpisode': {'sort': 6, 'airdate': date},
+        'nextEpisodeAirDate': '2000-01-01'
+      },
+      '看过5 · 预计12集 · 第6集 10-15'
+    ),
+    'legacy response': (
+      {'nextEpisodeAirDate': date},
+      '看过5 · 预计12集 · 下一集 10-15'
+    ),
+    'no next episode': ({}, '看过5 · 全12集'),
+    'new response without legacy date': (
+      {
+        'nextEpisode': {'sort': 6, 'airdate': date}
+      },
+      '看过5 · 预计12集 · 第6集 10-15'
+    ),
+    'null next episode object': (
+      {'nextEpisode': null, 'nextEpisodeAirDate': null},
+      '看过5 · 全12集'
+    ),
+    'empty dates': (
+      {
+        'nextEpisode': {'airdate': '  '},
+        'nextEpisodeAirDate': ''
+      },
+      '看过5 · 全12集'
+    ),
+    'null fields': (
+      {
+        'nextEpisode': {'sort': null, 'airdate': null},
+        'nextEpisodeAirDate': null
+      },
+      '看过5 · 全12集'
+    ),
+    'sort only': (
+      {
+        'nextEpisode': {'sort': 6}
+      },
+      '看过5 · 预计12集 · 第6集'
+    ),
+    'empty new date falls back': (
+      {
+        'nextEpisode': {'sort': 6, 'airdate': ''},
+        'nextEpisodeAirDate': date
+      },
+      '看过5 · 预计12集 · 第6集 10-15'
+    ),
+  };
+  for (final entry in episodeCases.entries) {
+    testWidgets('episode label handles ${entry.key}', (tester) async {
+      await tester.pumpWidget(_page(_EpisodeCollections(entry.value.$1)));
+      // 封面加载动画会持续请求帧，文案验证无需等待图片加载完成。
+      await tester.pump();
+      expect(find.text(entry.value.$2), findsOneWidget);
+      await tester.pumpWidget(const SizedBox.shrink());
+      expect(tester.takeException(), isNull);
+    });
+  }
+
   testWidgets('metrics load more; failure requires explicit retry',
       (tester) async {
     final collections = _PagedCollections();

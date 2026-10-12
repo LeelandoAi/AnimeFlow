@@ -399,17 +399,28 @@ class _CollectionItemCard extends StatelessWidget {
   });
 
   /// 观看进度文案：未看过时省略已看集数；连载中（有下一集）总集数带"预计"，否则为"全"；
-  String get _episodeLabel => [
-        if (collection.watchedEpisode > 0) '看过${collection.watchedEpisode}',
-        collection.nextEpisodeAirDate != null
-            ? '预计${collection.totalEpisodes}集'
-            : '全${collection.totalEpisodes}集',
-        if (collection.nextEpisodeAirDate != null) '下一集$_airDateLabel',
-      ].join(' · ');
+  String get _episodeLabel {
+    final nextEpisode = collection.nextEpisode;
+    final nextAirdate = nextEpisode?.airdate?.trim();
+    final legacyAirdate = collection.nextEpisodeAirDate?.trim();
+    final airdate = nextAirdate != null && nextAirdate.isNotEmpty
+        ? nextAirdate
+        : legacyAirdate;
+    final hasAirdate = airdate != null && airdate.isNotEmpty;
+    final sort = nextEpisode?.sort;
+    final hasSort = sort != null && sort > 0;
+    return [
+      if (collection.watchedEpisode > 0) '看过${collection.watchedEpisode}',
+      hasAirdate || hasSort
+          ? '预计${collection.totalEpisodes}集'
+          : '全${collection.totalEpisodes}集',
+      if (hasSort || hasAirdate)
+        '${hasSort ? '第$sort集' : '下一集'}${hasAirdate ? ' ${_airDateLabel(airdate)}' : ''}',
+    ].join(' · ');
+  }
 
   /// 下一集播出日期文案：本年只显示 MM-dd，跨年显示完整日期。
-  String get _airDateLabel {
-    final date = collection.nextEpisodeAirDate!;
+  String _airDateLabel(String date) {
     final currentYearPrefix = '${DateTime.now().year}-';
     return date.startsWith(currentYearPrefix) && date.length >= 10
         ? date.substring(5)
