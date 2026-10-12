@@ -29,6 +29,34 @@ abstract final class AppSettings {
   static Future<void> setCollectionSort(int type, CollectionSort sort) =>
       setSetting('${SettingKey.collectionSort}_$type', sort.apiValue);
 
+  static ({Set<String> included, Set<String> excluded}) get calendarTagFilter {
+    final saved = getSetting<Map>(SettingKey.calendarTagFilter);
+    final excluded = _readCalendarTags(saved?['excluded']);
+    final included = _readCalendarTags(saved?['included'])..removeAll(excluded);
+    return (included: included, excluded: excluded);
+  }
+
+  static Future<void> setCalendarTagFilter({
+    required Iterable<String> included,
+    required Iterable<String> excluded,
+  }) {
+    final excludedTags = _readCalendarTags(excluded.toList());
+    final includedTags = _readCalendarTags(included.toList())
+      ..removeAll(excludedTags);
+    return setSetting(SettingKey.calendarTagFilter, {
+      'included': includedTags.toList()..sort(),
+      'excluded': excludedTags.toList()..sort(),
+    });
+  }
+
+  static Set<String> _readCalendarTags(Object? value) => value is List
+      ? value
+          .whereType<String>()
+          .map((tag) => tag.trim())
+          .where((tag) => tag.isNotEmpty)
+          .toSet()
+      : <String>{};
+
   static const defaultAutoUpdate = true;
   static const defaultDownloadDanmaku = true;
   static const defaultDownloadMaxParallelEpisodes = 3;

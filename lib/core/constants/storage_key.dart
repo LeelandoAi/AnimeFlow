@@ -76,6 +76,7 @@ class SettingKey {
       locale = 'app_locale',
       rankingDetailsLayout = 'ranking_details_layout',
       collectionSort = 'collection_sort',
+      calendarTagFilter = 'calendar_tag_filter',
       fontFamily = 'font_family',
       selectedFontId = 'selected_font_id',
       downloadedFonts = 'downloaded_fonts',

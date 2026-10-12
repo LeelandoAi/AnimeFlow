@@ -1,16 +1,28 @@
 import 'package:anime_flow/app/localization/app_localizations.dart';
 import 'package:anime_flow/core/constants/layout_constant.dart';
 import 'package:anime_flow/core/constants/assets_path_constants.dart';
+import 'package:anime_flow/core/settings/app_settings.dart';
 import 'package:anime_flow/features/calendar/presentation/providers/calendar_provider.dart';
 import 'package:anime_flow/shared/models/bangumi/calendar_item.dart';
 import 'package:anime_flow/app/router/model/info_route_extra.dart';
 import 'package:anime_flow/app/router/app_router.dart';
 import 'package:anime_flow/shared/widgets/animation_network_image.dart';
+import 'package:anime_flow/shared/widgets/drop_down_menu.dart';
 import 'package:anime_flow/shared/widgets/ranking.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:go_router/go_router.dart';
+
+enum _CalendarTagFilterType {
+  include('筛选标签', '显示匹配任一所选标签的番剧，未选择时显示全部'),
+  exclude('排除标签', '隐藏包含任一所选标签的番剧');
+
+  const _CalendarTagFilterType(this.label, this.description);
+
+  final String label;
+  final String description;
+}
 
 // 每日放送页面
 class CalendarPage extends StatefulWidget {
@@ -25,7 +37,8 @@ class _CalendarPageState extends State<CalendarPage>
   late TabController _tabController;
   late int _selectedYear;
   late int _selectedMonth;
-  final Set<String> _excludedTags = {};
+  late Set<String> _includedTags;
+  late Set<String> _excludedTags;
 
   List<String> _weekdayLabels(AppLocalizations l10n) => [
         l10n.monday,
@@ -40,6 +53,9 @@ class _CalendarPageState extends State<CalendarPage>
   @override
   void initState() {
     super.initState();
+    final tagFilter = AppSettings.calendarTagFilter;
+    _includedTags = tagFilter.included;
+    _excludedTags = tagFilter.excluded;
     _tabController = TabController(length: 7, vsync: this);
     // 默认显示当前星期
     _tabController.index = DateTime.now().weekday - 1;
@@ -67,11 +83,35 @@ class _CalendarPageState extends State<CalendarPage>
               onPressed: () => context.pop(),
               icon: const Icon(Icons.arrow_back)),
         ),
+        actions: [
+          Consumer(
+            builder: (context, ref, _) {
+              final calendarAsync =
+                  ref.watch(calendarProvider(_selectedSeason));
+              final hasFilter =
+                  _includedTags.isNotEmpty || _excludedTags.isNotEmpty;
+              return IconButton(
+                tooltip: '筛选',
+                icon: Icon(
+                  Icons.tune_rounded,
+                  color:
+                      hasFilter ? Theme.of(context).colorScheme.primary : null,
+                ),
+                onPressed: () => _showTagFilter(
+                  context,
+                  calendarAsync.asData?.value.tags ?? const [],
+                  l10n,
+                ),
+              );
+            },
+          ),
+        ],
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(kTextTabBarHeight),
           child: Consumer(
             builder: (context, ref, _) {
-              final calendarAsync = ref.watch(calendarProvider(_selectedSeason));
+              final calendarAsync =
+                  ref.watch(calendarProvider(_selectedSeason));
               return calendarAsync.maybeWhen(
                 data: (calendarData) =>
                     _buildTabBarSection(context, calendarData.calendar, l10n),
@@ -108,7 +148,6 @@ class _CalendarPageState extends State<CalendarPage>
                     context,
                     calendarData.calendar,
                     weekday,
-                    calendarData.tags,
                     l10n,
                   );
                 }),
@@ -234,7 +273,6 @@ class _CalendarPageState extends State<CalendarPage>
     setState(() {
       _selectedYear = result.year;
       _selectedMonth = result.month;
-      _excludedTags.clear();
     });
     _tabController.index = 0;
   }
@@ -383,8 +421,11 @@ class _CalendarPageState extends State<CalendarPage>
     return hour == null || minute == null ? date : '$date $hour:$minute';
   }
 
-  bool _isVisible(CalendarItem item) =>
-      !item.subject.metaTags.any((tag) => _excludedTags.contains(tag.trim()));
+  bool _isVisible(CalendarItem item) {
+    final tags = item.subject.metaTags.map((tag) => tag.trim());
+    return (_includedTags.isEmpty || tags.any(_includedTags.contains)) &&
+        !tags.any(_excludedTags.contains);
+  }
 
   Widget _buildTabBarSection(
     BuildContext context,
@@ -448,7 +489,6 @@ class _CalendarPageState extends State<CalendarPage>
     BuildContext context,
     Calendar calendar,
     String weekday,
-    List<String> availableTags,
     AppLocalizations l10n,
   ) {
     final items = calendar.calendarData[weekday] ?? [];
@@ -470,15 +510,6 @@ class _CalendarPageState extends State<CalendarPage>
                   SliverToBoxAdapter(
                     child: _buildSeasonBanner(context, calendar, l10n),
                   ),
-                  // 标签
-                  if (availableTags.isNotEmpty)
-                    SliverToBoxAdapter(
-                      child: _buildTagFilter(
-                        context,
-                        availableTags,
-                        l10n,
-                      ),
-                    ),
                   // 番剧列表
                   if (filteredItems.isEmpty)
                     SliverToBoxAdapter(
@@ -539,45 +570,186 @@ class _CalendarPageState extends State<CalendarPage>
     );
   }
 
-  Widget _buildTagFilter(
+  Future<void> _showTagFilter(
     BuildContext context,
-    List<String> tags,
+    List<String> availableTags,
     AppLocalizations l10n,
-  ) {
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(10, 0, 10, 12),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: Row(
-          children: [
-            Text('排除标签', style: Theme.of(context).textTheme.labelLarge),
-            const SizedBox(width: 8),
-            ChoiceChip(
-              label: Text(l10n.all),
-              selected: _excludedTags.isEmpty,
-              showCheckmark: false,
-              onSelected: (_) => setState(_excludedTags.clear),
-            ),
-            for (final tag in tags) ...[
-              const SizedBox(width: 8),
-              FilterChip(
-                label: Text(tag),
-                selected: _excludedTags.contains(tag),
-                onSelected: (selected) {
-                  setState(() {
-                    if (selected) {
-                      _excludedTags.add(tag);
-                    } else {
-                      _excludedTags.remove(tag);
-                    }
-                  });
-                },
+  ) async {
+    final included = Set<String>.of(_includedTags);
+    final excluded = Set<String>.of(_excludedTags);
+    var filterType = included.isEmpty && excluded.isNotEmpty
+        ? _CalendarTagFilterType.exclude
+        : _CalendarTagFilterType.include;
+    // 保留其他季度已选标签，方便查看和取消持久化的选项。
+    final tags = {...availableTags, ...included, ...excluded}.toList()..sort();
+    final result = await showModalBottomSheet<
+        ({Set<String> included, Set<String> excluded})>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setSheetState) {
+          final theme = Theme.of(context);
+          final isInclude = filterType == _CalendarTagFilterType.include;
+          final selectedTags = isInclude ? included : excluded;
+          final otherTags = isInclude ? excluded : included;
+
+          return SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+              child: ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.75,
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Row(
+                      children: [
+                        Text('标签筛选', style: theme.textTheme.titleLarge),
+                        const Spacer(),
+                        IconButton(
+                          tooltip: l10n.close,
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close),
+                        ),
+                      ],
+                    ),
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: DropDownMenu<_CalendarTagFilterType>(
+                        tooltip: '筛选类型',
+                        buttonBorderRadius: BorderRadius.circular(12),
+                        items: _CalendarTagFilterType.values,
+                        selectedItem: filterType,
+                        onSelected: (type) =>
+                            setSheetState(() => filterType = type),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        buttonBuilder: (context, selectedItem) => Ink(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Row(
+                            spacing: 8,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(selectedItem!.label),
+                              const Icon(Icons.arrow_drop_down),
+                            ],
+                          ),
+                        ),
+                        itemBuilder: (context, type, isSelected) => Row(
+                          children: [
+                            Text(type.label),
+                            const Spacer(),
+                            if (isSelected) const Icon(Icons.check, size: 18),
+                          ],
+                        ),
+                      ),
+                    ),
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            if (tags.isEmpty) ...[
+                              Text(l10n.noData),
+                              const SizedBox(height: 12),
+                            ],
+                            Text(
+                              filterType.description,
+                              style: theme.textTheme.bodySmall,
+                            ),
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: 8,
+                              runSpacing: 8,
+                              children: [
+                                ChoiceChip(
+                                  label: Text(l10n.all),
+                                  selected: selectedTags.isEmpty,
+                                  showCheckmark: false,
+                                  onSelected: (_) =>
+                                      setSheetState(selectedTags.clear),
+                                ),
+                                for (final tag in tags)
+                                  FilterChip(
+                                    key: ValueKey('${filterType.label}:$tag'),
+                                    label: Text(tag),
+                                    selected: selectedTags.contains(tag),
+                                    onSelected: (selected) => setSheetState(() {
+                                      if (selected) {
+                                        selectedTags.add(tag);
+                                        otherTags.remove(tag);
+                                      } else {
+                                        selectedTags.remove(tag);
+                                      }
+                                    }),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () => setSheetState(() {
+                            included.clear();
+                            excluded.clear();
+                          }),
+                          child: const Text('重置'),
+                        ),
+                        const Spacer(),
+                        TextButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: Text(l10n.cancel),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          onPressed: () => Navigator.of(context).pop(
+                            (included: included, excluded: excluded),
+                          ),
+                          child: Text(l10n.confirm),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
-            ],
-          ],
-        ),
+            ),
+          );
+        },
       ),
     );
+    if (!mounted || result == null) return;
+    try {
+      await AppSettings.setCalendarTagFilter(
+        included: result.included,
+        excluded: result.excluded,
+      );
+      if (!mounted) return;
+      setState(() {
+        _includedTags = result.included;
+        _excludedTags = result.excluded;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.saveFailed)),
+      );
+    }
   }
 
   Widget _buildSeasonBanner(
