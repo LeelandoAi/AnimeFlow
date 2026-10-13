@@ -23,6 +23,14 @@ class IntroduceView extends StatefulWidget {
 
 class _IntroduceViewState extends State<IntroduceView>
     with AutomaticKeepAliveClientMixin {
+  final _collectionMenuTurns = ValueNotifier<double>(0);
+
+  @override
+  void dispose() {
+    _collectionMenuTurns.dispose();
+    super.dispose();
+  }
+
   @override
   bool get wantKeepAlive => true;
 
@@ -65,7 +73,9 @@ class _IntroduceViewState extends State<IntroduceView>
                       key: ValueKey(extra.subjectId),
                       collectType:
                           collectTypeFromApiType(subject.interest?.type),
-                      buttonBuilder: (context, label, icon, onPressed, isOpen) {
+                      onMenuOpen: () => _collectionMenuTurns.value = 0.5,
+                      onMenuClose: () => _collectionMenuTurns.value = 0,
+                      buttonBuilder: (context, label, icon, onPressed) {
                         return IconButton(
                           tooltip: label,
                           onPressed: onPressed,
@@ -74,10 +84,15 @@ class _IntroduceViewState extends State<IntroduceView>
                             minWidth: 40,
                             minHeight: 40,
                           ),
-                          icon: AnimatedRotation(
-                            turns: isOpen ? 0.5 : 0,
-                            duration: const Duration(milliseconds: 180),
-                            curve: Curves.easeOutCubic,
+                          icon: ValueListenableBuilder<double>(
+                            valueListenable: _collectionMenuTurns,
+                            builder: (context, turns, child) =>
+                                AnimatedRotation(
+                              turns: turns,
+                              duration: const Duration(milliseconds: 180),
+                              curve: Curves.easeOutCubic,
+                              child: child,
+                            ),
                             child: const Icon(Icons.expand_more_outlined),
                           ),
                         );

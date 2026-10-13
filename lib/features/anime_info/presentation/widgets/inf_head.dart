@@ -337,7 +337,7 @@ class InfoHeadView extends StatelessWidget {
               )
             else
               CollectionButton(
-                buttonBuilder: (context, label, icon, onPressed, isOpen) =>
+                buttonBuilder: (context, label, icon, onPressed) =>
                     buildCollectionButton(context, label, icon, onPressed),
                 collectType: collectTypeFromApiType(subjectItem.interest?.type),
                 offset: const Offset(0, 50),

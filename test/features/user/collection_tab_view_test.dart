@@ -134,6 +134,33 @@ FixedScrollMetrics _metrics(AxisDirection direction) => FixedScrollMetrics(
     );
 
 void main() {
+  testWidgets(
+      'collection menu callbacks rotate only the arrow and reset on dismissal',
+      (tester) async {
+    await tester.pumpWidget(_page(_EpisodeCollections({})));
+    await tester.pump();
+    final arrow = find.byIcon(Icons.expand_more_outlined);
+    final rotation =
+        find.ancestor(of: arrow, matching: find.byType(AnimatedRotation));
+    final header = find.ancestor(of: arrow, matching: find.byType(Row)).first;
+    final headerBefore = tester.widget<Row>(header);
+    expect(tester.widget<AnimatedRotation>(rotation).turns, 0);
+
+    await tester.tap(arrow);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<AnimatedRotation>(rotation).turns, 0.5);
+    expect(identical(tester.widget<Row>(header), headerBefore), isTrue);
+
+    await tester.tapAt(const Offset(750, 550));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 300));
+    expect(tester.widget<AnimatedRotation>(rotation).turns, 0);
+    expect(identical(tester.widget<Row>(header), headerBefore), isTrue);
+    await tester.pumpWidget(const SizedBox.shrink());
+    expect(tester.takeException(), isNull);
+  });
+
   final date = '${DateTime.now().year}-10-15';
   final episodeCases = <String, (Map<String, dynamic>, String)>{
     'new response': (

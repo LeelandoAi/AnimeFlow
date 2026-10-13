@@ -388,7 +388,7 @@ class _CollectionFooter extends StatelessWidget {
 }
 
 /// 条目卡片。
-class _CollectionItemCard extends StatelessWidget {
+class _CollectionItemCard extends StatefulWidget {
   final UserCollectionData collection;
   final Future<void> Function(CollectType type) onCollectTypeChanged;
 
@@ -397,6 +397,21 @@ class _CollectionItemCard extends StatelessWidget {
     required this.collection,
     required this.onCollectTypeChanged,
   });
+
+  @override
+  State<_CollectionItemCard> createState() => _CollectionItemCardState();
+}
+
+class _CollectionItemCardState extends State<_CollectionItemCard> {
+  final _menuTurns = ValueNotifier<double>(0);
+
+  UserCollectionData get collection => widget.collection;
+
+  @override
+  void dispose() {
+    _menuTurns.dispose();
+    super.dispose();
+  }
 
   /// 观看进度文案：未看过时省略已看集数；连载中（有下一集）总集数带"预计"，否则为"全"；
   String get _episodeLabel {
@@ -492,8 +507,9 @@ class _CollectionItemCard extends StatelessWidget {
                         collectType: collectTypeFromApiType(
                           collection.interest.type,
                         ),
-                        buttonBuilder:
-                            (context, label, icon, onPressed, isOpen) {
+                        onMenuOpen: () => _menuTurns.value = 0.5,
+                        onMenuClose: () => _menuTurns.value = 0,
+                        buttonBuilder: (context, label, icon, onPressed) {
                           return IconButton(
                             tooltip: label,
                             onPressed: onPressed,
@@ -502,15 +518,20 @@ class _CollectionItemCard extends StatelessWidget {
                               minWidth: 40,
                               minHeight: 40,
                             ),
-                            icon: AnimatedRotation(
-                              turns: isOpen ? 0.5 : 0,
-                              duration: const Duration(milliseconds: 180),
-                              curve: Curves.easeOutCubic,
+                            icon: ValueListenableBuilder<double>(
+                              valueListenable: _menuTurns,
+                              builder: (context, turns, child) =>
+                                  AnimatedRotation(
+                                turns: turns,
+                                duration: const Duration(milliseconds: 180),
+                                curve: Curves.easeOutCubic,
+                                child: child,
+                              ),
                               child: const Icon(Icons.expand_more_outlined),
                             ),
                           );
                         },
-                        onCollectTypeChanged: onCollectTypeChanged,
+                        onCollectTypeChanged: widget.onCollectTypeChanged,
                       ),
                     ],
                   ),

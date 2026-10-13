@@ -20,16 +20,19 @@ class CollectionButton extends StatefulWidget {
     String label,
     IconData icon,
     VoidCallback onPressed,
-    bool isOpen,
   ) buttonBuilder;
 
   final Future<void> Function(CollectType type)? onCollectTypeChanged;
+  final VoidCallback? onMenuOpen;
+  final VoidCallback? onMenuClose;
 
   const CollectionButton({
     super.key,
     required this.buttonBuilder,
     this.collectType,
     this.onCollectTypeChanged,
+    this.onMenuOpen,
+    this.onMenuClose,
     this.offset = const Offset(0, 40),
   });
 
@@ -40,7 +43,6 @@ class CollectionButton extends StatefulWidget {
 class _CollectionButtonState extends State<CollectionButton> {
   late CollectType? _displayType;
   bool _isUpdating = false;
-  bool _isOpen = false;
   final _menuKey = GlobalKey<PopupMenuButtonState<CollectType>>();
 
   @override
@@ -122,10 +124,10 @@ class _CollectionButtonState extends State<CollectionButton> {
           );
         }).toList();
       },
-      onOpened: () => setState(() => _isOpen = true),
-      onCanceled: () => setState(() => _isOpen = false),
+      onOpened: widget.onMenuOpen,
+      onCanceled: widget.onMenuClose,
       onSelected: (type) {
-        setState(() => _isOpen = false);
+        widget.onMenuClose?.call();
         _onCollectTypeSelected(type);
       },
       child: widget.buttonBuilder(
@@ -139,7 +141,6 @@ class _CollectionButtonState extends State<CollectionButton> {
         () {
           if (!_isUpdating) _menuKey.currentState?.showButtonMenu();
         },
-        _isOpen,
       ),
     );
   }

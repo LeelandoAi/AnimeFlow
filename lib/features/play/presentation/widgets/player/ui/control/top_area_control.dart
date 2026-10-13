@@ -501,10 +501,15 @@ class _CollectionControlButton extends ConsumerWidget {
 
     final l10n = AppLocalizations.of(context);
     final collectType = collectTypeFromApiType(collection.type);
+    final videoUiStateController = ref.read(videoUiProvider.notifier);
     return CollectionButton(
       key: ValueKey(collection.id),
       collectType: collectType,
-      buttonBuilder: (context, label, _, onPressed, isOpen) {
+      onMenuOpen: videoUiStateController.cancelUiTimer,
+      onMenuClose: () => videoUiStateController.hideControlsUi(
+        duration: const Duration(seconds: 2),
+      ),
+      buttonBuilder: (context, label, _, onPressed) {
         return IconButton(
           tooltip: label,
           onPressed: onPressed,
