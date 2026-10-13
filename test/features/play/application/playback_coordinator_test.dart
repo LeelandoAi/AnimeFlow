@@ -38,6 +38,186 @@ void main() {
   });
   tearDown(() => messenger.setMockDecodedMessageHandler(channel, null));
 
+  test('concurrent initialization shares one engine and one operation',
+      () async {
+    final started = Completer<void>();
+    final gate = Completer<void>();
+    final factory = _FakeEngineFactory(configure: (engine) {
+      engine.beforeOperation = (operation) async {
+        if (operation == 'initialize') {
+          started.complete();
+          await gate.future;
+        }
+      };
+    });
+    final coordinator =
+        PlaybackCoordinator(engineFactory: factory, adBlocker: false);
+    addTearDown(coordinator.dispose);
+    final first = coordinator.initialize();
+    await started.future;
+    final second = coordinator.initialize();
+    expect(second, same(first));
+    expect(factory.created, hasLength(1));
+    gate.complete();
+    await Future.wait([first, second]);
+    expect(factory.created.single._events.hasListener, isTrue);
+  });
+
+  test('disposal waits for initialization without subscribing afterwards',
+      () async {
+    final started = Completer<void>();
+    final gate = Completer<void>();
+    final factory = _FakeEngineFactory(configure: (engine) {
+      engine.beforeOperation = (operation) async {
+        if (operation == 'initialize') {
+          started.complete();
+          await gate.future;
+        }
+      };
+    });
+    final coordinator =
+        PlaybackCoordinator(engineFactory: factory, adBlocker: false);
+    final initializing = coordinator.initialize();
+    await started.future;
+    final engine = factory.created.single;
+    final eventsDone = coordinator.events.drain<void>();
+    final disposing = coordinator.dispose();
+    await Future<void>.delayed(Duration.zero);
+    expect(engine.disposeCount, 0);
+    expect(engine._events.hasListener, isFalse);
+    gate.complete();
+    await Future.wait([initializing, disposing, eventsDone]);
+    expect(engine.disposeCount, 1);
+    expect(engine._events.hasListener, isFalse);
+    await expectLater(coordinator.initialize(), throwsStateError);
+    expect(factory.created, hasLength(1));
+  });
+
+  test('disposal releases a failed initialization and closes events', () async {
+    final factory = _FakeEngineFactory(failKernel: PlayerKernel.mediaKit);
+    final coordinator =
+        PlaybackCoordinator(engineFactory: factory, adBlocker: false);
+    await expectLater(coordinator.initialize(), throwsStateError);
+    expect(factory.created.single.disposeCount, 0);
+    final eventsDone = coordinator.events.drain<void>();
+    await coordinator.dispose();
+    await eventsDone;
+    expect(factory.created.single.disposeCount, 1);
+  });
+
+  test(
+      'disposal before initialization closes events without creating an engine',
+      () async {
+    final factory = _FakeEngineFactory();
+    final coordinator =
+        PlaybackCoordinator(engineFactory: factory, adBlocker: false);
+    final eventsDone = coordinator.events.drain<void>();
+    await coordinator.dispose();
+    await eventsDone;
+    await expectLater(coordinator.initialize(), throwsStateError);
+    expect(factory.created, isEmpty);
+  });
+
+  test('old engine cleanup failure keeps the committed engine playable',
+      () async {
+    final factory = _FakeEngineFactory(configure: (engine) {
+      engine.beforeOperation = (operation) async {
+        if (engine.kernel == PlayerKernel.mediaKit && operation == 'dispose') {
+          throw StateError('old engine disposal failed');
+        }
+      };
+    });
+    final coordinator =
+        PlaybackCoordinator(engineFactory: factory, adBlocker: false);
+    addTearDown(coordinator.dispose);
+    await coordinator.initialize();
+    expect(
+        await coordinator.switchKernel(PlayerKernel.fvp, _snapshot()), isTrue);
+    expect(coordinator.kernel, PlayerKernel.fvp);
+    expect(factory.created.first.playCount, 0);
+    expect(factory.created.first.disposeCount, 1);
+    expect(factory.created.last.disposeCount, 0);
+    expect(factory.created.last.playCount, 1);
+  });
+
+  test('playback failure after committing reports an error without rollback',
+      () async {
+    var failPlay = true;
+    final factory = _FakeEngineFactory(configure: (engine) {
+      engine.beforeOperation = (operation) async {
+        if (engine.kernel == PlayerKernel.fvp &&
+            operation == 'play' &&
+            failPlay) {
+          failPlay = false;
+          throw StateError('new engine playback failed');
+        }
+      };
+    });
+    final coordinator =
+        PlaybackCoordinator(engineFactory: factory, adBlocker: false);
+    addTearDown(coordinator.dispose);
+    await coordinator.initialize();
+    final errors = <PlayerError>[];
+    final subscription = coordinator.events.listen((event) {
+      if (event is PlayerError) errors.add(event);
+    });
+    addTearDown(subscription.cancel);
+    expect(
+        await coordinator.switchKernel(PlayerKernel.fvp, _snapshot()), isTrue);
+    await Future<void>.delayed(Duration.zero);
+    expect(coordinator.kernel, PlayerKernel.fvp);
+    expect(factory.created.first.playCount, 0);
+    expect(factory.created.first.disposeCount, 1);
+    expect(factory.created.last.disposeCount, 0);
+    expect(errors, hasLength(1));
+    await coordinator.play();
+    expect(factory.created.last.playCount, 2);
+  });
+
+  test('failed candidate cleanup does not prevent restoring the current engine',
+      () async {
+    final factory = _FakeEngineFactory(
+      failKernel: PlayerKernel.fvp,
+      configure: (engine) {
+        engine.beforeOperation = (operation) async {
+          if (engine.kernel == PlayerKernel.fvp && operation == 'dispose') {
+            throw StateError('candidate disposal failed');
+          }
+        };
+      },
+    );
+    final coordinator =
+        PlaybackCoordinator(engineFactory: factory, adBlocker: false);
+    addTearDown(coordinator.dispose);
+    await coordinator.initialize();
+    expect(
+        await coordinator.switchKernel(PlayerKernel.fvp, _snapshot()), isFalse);
+    expect(coordinator.kernel, PlayerKernel.mediaKit);
+    expect(factory.created.first.disposeCount, 0);
+    expect(factory.created.first.playCount, 1);
+    expect(factory.created.last.disposeCount, 1);
+  });
+
+  test('engine disposal failure still closes events and releases wakelock',
+      () async {
+    final factory = _FakeEngineFactory(configure: (engine) {
+      engine.beforeOperation = (operation) async {
+        if (operation == 'dispose') throw StateError('native disposal failed');
+      };
+    });
+    final coordinator =
+        PlaybackCoordinator(engineFactory: factory, adBlocker: false);
+    await coordinator.initialize();
+    factory.created.single.emit(const PlayerPlayingChanged(true));
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, [true]);
+    final eventsDone = coordinator.events.drain<void>();
+    await coordinator.dispose();
+    await eventsDone;
+    expect(calls, [true, false]);
+    expect(factory.created.single.disposeCount, 1);
+  });
+
   for (final kernel in PlayerKernel.values) {
     test('$kernel controls wakelock through playback and terminal events',
         () async {
@@ -422,6 +602,7 @@ class _FakePlayerEngine implements PlayerEngine {
   @override
   Future<void> play() async {
     playCount++;
+    await beforeOperation?.call('play');
     if (emitPlayingChanges) emit(const PlayerPlayingChanged(true));
   }
 
@@ -454,8 +635,11 @@ class _FakePlayerEngine implements PlayerEngine {
   @override
   Future<void> dispose() async {
     disposeCount++;
-    await beforeOperation?.call('dispose');
-    await _events.close();
+    try {
+      await beforeOperation?.call('dispose');
+    } finally {
+      await _events.close();
+    }
   }
 
   void emit(PlayerEvent event) => _events.add(event);

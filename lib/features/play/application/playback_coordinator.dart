@@ -24,39 +24,47 @@ class PlaybackCoordinator with WidgetsBindingObserver {
   final bool adBlocker;
   Future<void>? _wakelockUpdates;
   bool _playing = false;
-  bool _foreground = true;
   bool _requestedWakelock = false;
   final StreamController<PlayerEvent> _events =
       StreamController<PlayerEvent>.broadcast();
   StreamSubscription<PlayerEvent>? _engineSubscription;
-  late PlayerEngine _engine;
-  bool _initialized = false;
+  PlayerEngine? _engine;
   bool _disposed = false;
   late final _operations = PlayerOperationQueue(ensureReady: _ensureReady);
   Future<void>? _disposal;
+  Future<void>? _initialization;
 
-  PlayerKernel get kernel => _engine.kernel;
+  PlayerEngine get _activeEngine =>
+      _engine ?? (throw StateError('PlaybackCoordinator has no active engine'));
+  bool get _keepScreenOn =>
+      !_disposed &&
+      _playing &&
+      (WidgetsBinding.instance.lifecycleState == null ||
+          WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed);
+
+  PlayerKernel get kernel => _activeEngine.kernel;
   Stream<PlayerEvent> get events => _events.stream;
-  PlayerCapabilities get capabilities => _engine.capabilities;
+  PlayerCapabilities get capabilities => _activeEngine.capabilities;
 
-  Future<void> initialize({PlayerKernel kernel = PlayerKernel.mediaKit}) async {
-    if (_initialized) return;
-    _engine = engineFactory.create(kernel, adBlocker: adBlocker);
-    await _engine.initialize();
-    _subscribeToEngine(_engine);
-    _initialized = true;
-    if (!_disposed) {
-      final binding = WidgetsBinding.instance;
-      _foreground = binding.lifecycleState == null ||
-          binding.lifecycleState == AppLifecycleState.resumed;
-      binding.addObserver(this);
+  Future<void> initialize({PlayerKernel kernel = PlayerKernel.mediaKit}) {
+    if (_disposed) {
+      return Future<void>.error(StateError('PlaybackCoordinator is disposed'));
     }
+    return _initialization ??= _initialize(kernel);
+  }
+
+  Future<void> _initialize(PlayerKernel kernel) async {
+    final engine = engineFactory.create(kernel, adBlocker: adBlocker);
+    _engine = engine;
+    await engine.initialize();
+    if (_disposed) return;
+    _subscribeToEngine(engine);
+    WidgetsBinding.instance.addObserver(this);
   }
 
   Widget buildVideoSurface({required BoxFit fit}) {
-    // The first widget build can precede completion of initialize(). The engine
-    // already exists at that point and owns its surface readiness checks.
-    return _engine.buildVideoSurface(fit: fit);
+    // 首次构建可能早于初始化完成，由已经创建的内核检查画面是否就绪。
+    return _activeEngine.buildVideoSurface(fit: fit);
   }
 
   Future<void> open(
@@ -64,96 +72,92 @@ class PlaybackCoordinator with WidgetsBindingObserver {
     Duration? startPosition,
     bool autoPlay = false,
   }) =>
-      _runCommand(() => _engine.open(
+      _run(() => _activeEngine.open(
             source,
             startPosition: startPosition,
             autoPlay: autoPlay,
           ));
 
-  Future<void> play() => _runCommand(() => _engine.play());
-  Future<void> pause() => _runCommand(() => _engine.pause());
-  Future<void> stop() => _runCommand(() => _engine.stop());
-  Future<void> seek(Duration position) =>
-      _runCommand(() => _engine.seek(position));
-  Future<void> setVolume(double volume) =>
-      _runCommand(() => _engine.setVolume(volume));
-  Future<void> setRate(double rate) => _runCommand(() => _engine.setRate(rate));
-  Future<Uint8List?> screenshot() =>
-      _operations.run(() => _engine.screenshot());
-  Future<void> setShaders(String shaderList) =>
-      _runCommand(() => _engine.setShaders(shaderList));
+  Future<void> play() => _run(() => _activeEngine.play());
+  Future<void> pause() => _run(() => _activeEngine.pause());
+  Future<void> stop() => _run(() => _activeEngine.stop());
+  Future<void> seek(Duration position) => _run(() => _activeEngine.seek(position));
+  Future<void> setVolume(double volume) => _run(() => _activeEngine.setVolume(volume));
+  Future<void> setRate(double rate) => _run(() => _activeEngine.setRate(rate));
+  Future<Uint8List?> screenshot() => _run<Uint8List?>(() => _activeEngine.screenshot());
+  Future<void> setShaders(String shaderList) => _run(() => _activeEngine.setShaders(shaderList));
 
-  Future<void> _runCommand(Future<void> Function() command) async {
+  Future<T?> _run<T>(Future<T> Function() command) async {
     try {
-      await _operations.run(command);
+      return await _operations.run(command);
     } catch (_) {
-      // Controls already queued when the page exits are cancelled silently.
+      // 页面退出后，静默取消尚未执行的控制命令。
       if (!_disposed) rethrow;
+      return null;
     }
   }
 
-  /// 切换内核并恢复快照。失败时保留原内核，并恢复原播放状态。
+  /// 切换内核并恢复快照；提交前失败时保留原内核，提交后由新内核承接异常。
   Future<bool> switchKernel(PlayerKernel target, PlayerSnapshot snapshot,
-      {bool force = false, String? shaders}) async {
+          {bool force = false, String? shaders}) async =>
+      await _run(() async {
+        if (!force && target == _activeEngine.kernel) return true;
+
+        final current = _activeEngine;
+        final source = snapshot.source;
+        PlayerEngine? next;
+        try {
+          if (source != null) await current.pause();
+          _ensureReady();
+          next = engineFactory.create(target, adBlocker: adBlocker);
+          await next.initialize();
+          _ensureReady();
+          if (source != null) {
+            await next.open(
+              source,
+              startPosition: snapshot.position,
+              autoPlay: false,
+            );
+            _ensureReady();
+          }
+          await next.setVolume(snapshot.volume);
+          _ensureReady();
+          await next.setRate(snapshot.rate);
+          if (shaders != null && next.capabilities.supportsShader) {
+            await next.setShaders(shaders);
+          }
+          _ensureReady();
+        } catch (error, stackTrace) {
+          await _cleanup(next?.dispose);
+          if (_disposed) return false;
+          LiggLogger().e('准备播放器内核失败', error: error, stackTrace: stackTrace);
+          next = null;
+        }
+
+        if (next != null) {
+          // 提交后只清理旧内核；准备失败时继续保留原内核。
+          final previousSubscription = _engineSubscription;
+          _engine = next;
+          _subscribeToEngine(next);
+          await _cleanup(previousSubscription?.cancel);
+          await _cleanup(current.dispose);
+        }
+        if (!_disposed && source != null && snapshot.wasPlaying) {
+          try {
+            await _activeEngine.play();
+          } catch (error, stackTrace) {
+            if (!_disposed) _events.add(PlayerError(error, stackTrace));
+          }
+        }
+        return !_disposed && next != null;
+      }) ??
+      false;
+
+  Future<void> _cleanup(Future<void> Function()? action) async {
     try {
-      return await _operations.run(() =>
-          _switchKernel(target, snapshot, force: force, shaders: shaders));
-    } catch (_) {
-      if (_disposed) return false;
-      rethrow;
-    }
-  }
-
-  Future<bool> _switchKernel(PlayerKernel target, PlayerSnapshot snapshot,
-      {bool force = false, String? shaders}) async {
-    _ensureReady();
-    if (!force && target == _engine.kernel) return true;
-
-    final current = _engine;
-    PlayerEngine? next;
-    try {
-      final source = snapshot.source;
-      if (source != null) await current.pause();
-      _ensureReady();
-      next = engineFactory.create(target, adBlocker: adBlocker);
-      await next.initialize();
-      _ensureReady();
-      if (source != null) {
-        await next.open(
-          source,
-          startPosition: snapshot.position,
-          autoPlay: false,
-        );
-        _ensureReady();
-      }
-      await next.setVolume(snapshot.volume);
-      _ensureReady();
-      await next.setRate(snapshot.rate);
-      if (shaders != null && next.capabilities.supportsShader) {
-        await next.setShaders(shaders);
-      }
-      _ensureReady();
-
-      await _engineSubscription?.cancel();
-      _ensureReady();
-      _engine = next;
-      _subscribeToEngine(next);
-      await current.dispose();
-      _ensureReady();
-      if (source != null && snapshot.wasPlaying) await next.play();
-      return !_disposed;
-    } catch (_) {
-      // Once committed, dispose() owns the active engine. Before that, the
-      // switching operation owns the candidate and must release it itself.
-      if (_disposed) {
-        if (next != _engine) await next?.dispose();
-        return false;
-      }
-      await next?.dispose();
-      if (snapshot.source != null && snapshot.wasPlaying) {
-        unawaited(current.play());
-      }
-      return false;
+      await action?.call();
+    } catch (error, stackTrace) {
+      LiggLogger().e('清理播放器资源失败', error: error, stackTrace: stackTrace);
     }
   }
 
@@ -163,13 +167,16 @@ class PlaybackCoordinator with WidgetsBindingObserver {
     _disposed = true;
     WidgetsBinding.instance.removeObserver(this);
     _updateWakelock();
-    // Mark cancellation immediately, but let pending native work finish before
-    // releasing either engine or closing the shared event stream.
     try {
+      // 初始化异常由调用方处理，清理仍等待初始化和已提交的原生操作完成。
+      if (_engineSubscription == null) {
+        await _initialization?.catchError((Object _) {});
+      }
       await _operations.drained;
-      await _engineSubscription?.cancel();
-      await _engine.dispose();
-      await _events.close();
+      await _cleanup(_engineSubscription?.cancel);
+      await _cleanup(_engine?.dispose);
+      _engine = null;
+      await _cleanup(_events.close);
     } finally {
       await _wakelockUpdates;
     }
@@ -194,19 +201,18 @@ class PlaybackCoordinator with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (_disposed) return;
-    _foreground = state == AppLifecycleState.resumed;
     // 返回前台时，可能需要重新启用原生屏幕常亮。
-    _updateWakelock(force: _foreground && _playing);
+    _updateWakelock(force: state == AppLifecycleState.resumed && _playing);
   }
 
   void _updateWakelock({bool force = false}) {
-    final enabled = !_disposed && _foreground && _playing;
+    final enabled = _keepScreenOn;
     if (!force && enabled == _requestedWakelock) return;
     _requestedWakelock = enabled;
     // 按顺序执行原生调用，避免延迟的启用请求在释放后生效。
     _wakelockUpdates =
         (_wakelockUpdates ?? Future<void>.value()).then((_) async {
-      if (enabled && (_disposed || !_foreground || !_playing)) return;
+      if (enabled && !_keepScreenOn) return;
       try {
         await WakelockPlus.toggle(enable: enabled);
       } catch (error, stackTrace) {
@@ -217,7 +223,7 @@ class PlaybackCoordinator with WidgetsBindingObserver {
   }
 
   void _ensureReady() {
-    if (!_initialized || _disposed) {
+    if (_engineSubscription == null || _disposed) {
       throw StateError('PlaybackCoordinator is not initialized');
     }
   }
