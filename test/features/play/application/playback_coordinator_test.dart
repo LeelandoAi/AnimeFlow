@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:anime_flow/features/play/application/playback_coordinator.dart';
 import 'package:anime_flow/features/play/domain/player/player_capabilities.dart';
@@ -12,8 +11,6 @@ import 'package:anime_flow/features/play/infrastructure/player/player_engine_fac
 import 'package:material_ui/material_ui.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
-// 测试复用插件的消息编码器，在通道层模拟原生响应。
-// ignore: depend_on_referenced_packages
 import 'package:wakelock_plus_platform_interface/messages.g.dart';
 
 void main() {
