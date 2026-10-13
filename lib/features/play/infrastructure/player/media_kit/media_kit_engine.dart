@@ -112,6 +112,8 @@ class MediaKitEngine implements PlayerEngine {
               controller: controller,
               fit: fit,
               controls: NoVideoControls,
+              // 由 PlaybackCoordinator 统一管理屏幕常亮。
+              wakelock: false,
             ),
     );
   }

@@ -10,9 +10,156 @@ import 'package:anime_flow/features/play/domain/player/player_snapshot.dart';
 import 'package:anime_flow/features/play/domain/player/playback_source.dart';
 import 'package:anime_flow/features/play/infrastructure/player/player_engine_factory.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+// 测试复用插件的消息编码器，在通道层模拟原生响应。
+// ignore: depend_on_referenced_packages
+import 'package:wakelock_plus_platform_interface/messages.g.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  late List<bool> calls;
+  Future<void> Function(bool enable)? beforeToggle;
+  const channel = BasicMessageChannel<Object?>(
+    'dev.flutter.pigeon.wakelock_plus_platform_interface.WakelockPlusApi.toggle',
+    WakelockPlusApi.pigeonChannelCodec,
+  );
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+  setUp(() {
+    calls = <bool>[];
+    beforeToggle = null;
+    messenger.setMockDecodedMessageHandler<Object?>(channel, (message) async {
+      final enabled = ((message as List).single as ToggleMessage).enable!;
+      calls.add(enabled);
+      await beforeToggle?.call(enabled);
+      return <Object?>[null];
+    });
+  });
+  tearDown(() => messenger.setMockDecodedMessageHandler(channel, null));
+
+  for (final kernel in PlayerKernel.values) {
+    test('$kernel controls wakelock through playback and terminal events',
+        () async {
+      final factory = _FakeEngineFactory();
+      final coordinator = PlaybackCoordinator(
+        engineFactory: factory,
+        adBlocker: false,
+      );
+      addTearDown(coordinator.dispose);
+      await coordinator.initialize(kernel: kernel);
+      final engine = factory.created.single;
+      Future<void> emit(PlayerEvent event) async {
+        engine.emit(event);
+        await Future<void>.delayed(Duration.zero);
+      }
+
+      await emit(const PlayerPlayingChanged(true));
+      await emit(const PlayerPlayingChanged(true));
+      await emit(const PlayerBufferingChanged(true));
+      expect(calls, [true]);
+      await emit(const PlayerPlayingChanged(false));
+      expect(calls, [true, false]);
+      await emit(const PlayerPlayingChanged(true));
+      await emit(const PlayerCompleted());
+      expect(calls, [true, false, true, false]);
+      await emit(const PlayerPlayingChanged(true));
+      await emit(PlayerError(StateError('playback failed')));
+      expect(calls.last, isFalse);
+      await emit(const PlayerPlayingChanged(true));
+      await coordinator.dispose();
+      expect(calls.last, isFalse);
+    });
+  }
+
+  test('background releases wakelock and foreground reacquires it', () async {
+    final binding = WidgetsBinding.instance;
+    addTearDown(() =>
+        binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed));
+    final factory = _FakeEngineFactory();
+    final coordinator = PlaybackCoordinator(
+      engineFactory: factory,
+      adBlocker: false,
+    );
+    addTearDown(coordinator.dispose);
+    await coordinator.initialize(kernel: PlayerKernel.fvp);
+    final engine = factory.created.single;
+    engine.emit(const PlayerPlayingChanged(true));
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, [true]);
+
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, [true, false]);
+    engine.emit(const PlayerPlayingChanged(true));
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, [true, false]);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, [true, false, true]);
+    engine.emit(const PlayerPlayingChanged(false));
+    await Future<void>.delayed(Duration.zero);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.inactive);
+    binding.handleAppLifecycleStateChanged(AppLifecycleState.resumed);
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, [true, false, true, false]);
+  });
+
+  test('dispose waits for delayed enable and releases it afterwards', () async {
+    final enableStarted = Completer<void>();
+    final enableGate = Completer<void>();
+    beforeToggle = (enable) async {
+      if (enable) {
+        enableStarted.complete();
+        await enableGate.future;
+      }
+    };
+    final factory = _FakeEngineFactory();
+    final coordinator = PlaybackCoordinator(
+      engineFactory: factory,
+      adBlocker: false,
+    );
+    await coordinator.initialize(kernel: PlayerKernel.fvp);
+    factory.created.single.emit(const PlayerPlayingChanged(true));
+    await enableStarted.future;
+    var disposed = false;
+    final disposal = coordinator.dispose().then((_) => disposed = true);
+    await Future<void>.delayed(Duration.zero);
+    expect(disposed, isFalse);
+    expect(calls, [true]);
+    enableGate.complete();
+    await disposal;
+    expect(calls, [true, false]);
+    coordinator.didChangeAppLifecycleState(AppLifecycleState.resumed);
+    await Future<void>.delayed(Duration.zero);
+    expect(calls, [true, false]);
+  });
+
+  for (final fails in [false, true]) {
+    test('kernel switch restores wakelock (failure: $fails)', () async {
+      final factory = _FakeEngineFactory(
+        failKernel: fails ? PlayerKernel.fvp : null,
+        configure: (engine) => engine.emitPlayingChanges = true,
+      );
+      final coordinator = PlaybackCoordinator(
+        engineFactory: factory,
+        adBlocker: false,
+      );
+      addTearDown(coordinator.dispose);
+      await coordinator.initialize();
+      await coordinator.play();
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, [true]);
+      expect(await coordinator.switchKernel(PlayerKernel.fvp, _snapshot()),
+          !fails);
+      await Future<void>.delayed(Duration.zero);
+      expect(calls, [true, false, true]);
+      await coordinator.stop();
+      await Future<void>.delayed(Duration.zero);
+      expect(calls.last, isFalse);
+    });
+  }
+
   testWidgets('surface is available during the initial synchronous build',
       (tester) async {
     final factory = _FakeEngineFactory();
@@ -238,6 +385,7 @@ class _FakePlayerEngine implements PlayerEngine {
   int pauseCount = 0;
   int playCount = 0;
   int disposeCount = 0;
+  bool emitPlayingChanges = false;
   Duration? openedPosition;
   PlaybackSource? openedSource;
   Future<void> Function(String operation)? beforeOperation;
@@ -272,13 +420,21 @@ class _FakePlayerEngine implements PlayerEngine {
   }
 
   @override
-  Future<void> play() async => playCount++;
+  Future<void> play() async {
+    playCount++;
+    if (emitPlayingChanges) emit(const PlayerPlayingChanged(true));
+  }
 
   @override
-  Future<void> pause() async => pauseCount++;
+  Future<void> pause() async {
+    pauseCount++;
+    if (emitPlayingChanges) emit(const PlayerPlayingChanged(false));
+  }
 
   @override
-  Future<void> stop() async {}
+  Future<void> stop() async {
+    if (emitPlayingChanges) emit(const PlayerPlayingChanged(false));
+  }
 
   @override
   Future<void> seek(Duration position) async {}

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'package:anime_flow/core/logger/logger.dart';
 import 'package:anime_flow/features/play/domain/player/playback_source.dart';
 import 'package:anime_flow/features/play/domain/player/player_capabilities.dart';
 import 'package:anime_flow/features/play/domain/player/player_engine.dart';
@@ -10,9 +11,10 @@ import 'package:anime_flow/features/play/domain/player/player_snapshot.dart';
 import 'package:anime_flow/features/play/infrastructure/player/player_engine_factory.dart';
 import 'package:anime_flow/features/play/infrastructure/player/player_operation_queue.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 
 /// 播放器基础协调层。
-class PlaybackCoordinator {
+class PlaybackCoordinator with WidgetsBindingObserver {
   PlaybackCoordinator({
     required this.engineFactory,
     required this.adBlocker,
@@ -20,6 +22,10 @@ class PlaybackCoordinator {
 
   final PlayerEngineFactory engineFactory;
   final bool adBlocker;
+  Future<void>? _wakelockUpdates;
+  bool _playing = false;
+  bool _foreground = true;
+  bool _requestedWakelock = false;
   final StreamController<PlayerEvent> _events =
       StreamController<PlayerEvent>.broadcast();
   StreamSubscription<PlayerEvent>? _engineSubscription;
@@ -39,6 +45,12 @@ class PlaybackCoordinator {
     await _engine.initialize();
     _subscribeToEngine(_engine);
     _initialized = true;
+    if (!_disposed) {
+      final binding = WidgetsBinding.instance;
+      _foreground = binding.lifecycleState == null ||
+          binding.lifecycleState == AppLifecycleState.resumed;
+      binding.addObserver(this);
+    }
   }
 
   Widget buildVideoSurface({required BoxFit fit}) {
@@ -149,17 +161,58 @@ class PlaybackCoordinator {
 
   Future<void> _dispose() async {
     _disposed = true;
+    WidgetsBinding.instance.removeObserver(this);
+    _updateWakelock();
     // Mark cancellation immediately, but let pending native work finish before
     // releasing either engine or closing the shared event stream.
-    await _operations.drained;
-    await _engineSubscription?.cancel();
-    await _engine.dispose();
-    await _events.close();
+    try {
+      await _operations.drained;
+      await _engineSubscription?.cancel();
+      await _engine.dispose();
+      await _events.close();
+    } finally {
+      await _wakelockUpdates;
+    }
   }
 
   void _subscribeToEngine(PlayerEngine engine) {
+    _playing = false;
+    _updateWakelock();
     _engineSubscription = engine.events.listen((event) {
-      if (!_disposed && !_events.isClosed) _events.add(event);
+      if (_disposed || engine != _engine || _events.isClosed) return;
+      if (event is PlayerPlayingChanged) {
+        _playing = event.playing;
+        _updateWakelock();
+      } else if (event is PlayerCompleted || event is PlayerError) {
+        _playing = false;
+        _updateWakelock();
+      }
+      _events.add(event);
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (_disposed) return;
+    _foreground = state == AppLifecycleState.resumed;
+    // 返回前台时，可能需要重新启用原生屏幕常亮。
+    _updateWakelock(force: _foreground && _playing);
+  }
+
+  void _updateWakelock({bool force = false}) {
+    final enabled = !_disposed && _foreground && _playing;
+    if (!force && enabled == _requestedWakelock) return;
+    _requestedWakelock = enabled;
+    // 按顺序执行原生调用，避免延迟的启用请求在释放后生效。
+    _wakelockUpdates =
+        (_wakelockUpdates ?? Future<void>.value()).then((_) async {
+      if (enabled && (_disposed || !_foreground || !_playing)) return;
+      try {
+        await WakelockPlus.toggle(enable: enabled);
+      } catch (error, stackTrace) {
+        if (_requestedWakelock == enabled) _requestedWakelock = !enabled;
+        LiggLogger().e('设置播放屏幕常亮失败', error: error, stackTrace: stackTrace);
+      }
     });
   }
 

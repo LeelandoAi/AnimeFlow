@@ -131,6 +131,7 @@ dependencies:
   logger: ^2.6.2 # 提供分级、可扩展的应用日志输出接口。
   synchronized: ^3.4.1+2 # 为异步代码提供互斥锁和同步执行机制。
   share_plus: ^13.3.1 # 调用平台原生分享面板分享文本、文件或 URI。
+  wakelock_plus: 1.8.0 # 提供跨平台屏幕常亮控制。
 
   # 文本与图像处理
   flutter_markdown_plus: ^1.0.12 # 将 Markdown 文本解析并渲染为 Flutter widget。
