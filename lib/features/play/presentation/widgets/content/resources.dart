@@ -303,7 +303,7 @@ class _VideoResourcesViewState extends ConsumerState<VideoResourcesView> {
                     ],
                   ),
                 ),
-                OutlinedButton.icon(
+                FilledButton.icon(
                   onPressed: _showSourceDrawer,
                   style: OutlinedButton.styleFrom(
                     side: BorderSide(
