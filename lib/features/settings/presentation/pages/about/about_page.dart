@@ -170,6 +170,13 @@ class _AboutSettingsPageState extends ConsumerState<AboutSettingsPage> {
                           ),
                           const Divider(),
                           ListTile(
+                            title: const Text('关于作者'),
+                            trailing: const Icon(Icons.chevron_right),
+                            onTap: () =>
+                                const SettingAuthorRoute().push(context),
+                          ),
+                          const Divider(),
+                          ListTile(
                             title: Text(l10n.projectUpdates),
                             trailing: const Icon(Icons.article_outlined),
                             onTap: () =>

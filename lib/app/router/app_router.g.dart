@@ -733,6 +733,11 @@ RouteBase get $settingsShellRoute => ShellRouteData.$route(
               factory: $SettingAboutRoute._fromState,
             ),
             GoRouteData.$route(
+              path: 'author',
+              hasOverriddenOnExit: false,
+              factory: $SettingAuthorRoute._fromState,
+            ),
+            GoRouteData.$route(
               path: 'updates',
               hasOverriddenOnExit: false,
               factory: $SettingUpdatesRoute._fromState,
@@ -1000,6 +1005,29 @@ mixin $SettingAboutRoute on GoRouteData {
   @override
   String get location => GoRouteData.$location(
         '/settings/about',
+      );
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+mixin $SettingAuthorRoute on GoRouteData {
+  static SettingAuthorRoute _fromState(GoRouterState state) =>
+      const SettingAuthorRoute();
+
+  @override
+  String get location => GoRouteData.$location(
+        '/settings/author',
       );
 
   @override
