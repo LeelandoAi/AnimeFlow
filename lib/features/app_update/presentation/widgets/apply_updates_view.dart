@@ -84,11 +84,16 @@ class _ApplyUpdatesViewState extends State<ApplyUpdatesView> {
                             fontSize: 14,
                             color: colorScheme.onSurface,
                           ),
+                          h1: TextStyle(color: colorScheme.onSurface),
+                          h2: TextStyle(color: colorScheme.onSurface),
                           h3: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
                             color: colorScheme.onSurface,
                           ),
+                          h4: TextStyle(color: colorScheme.onSurface),
+                          h5: TextStyle(color: colorScheme.onSurface),
+                          h6: TextStyle(color: colorScheme.onSurface),
                           listBullet: TextStyle(
                             fontSize: 14,
                             color: colorScheme.onSurface,
