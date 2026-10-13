@@ -11,32 +11,18 @@ import 'package:screen_brightness_platform_interface/screen_brightness_platform_
 
 part 'video_ui_provider.g.dart';
 
-abstract class VideoUiStateActions {
-  void restartControlsAutoHideTimer({
-    Duration duration = const Duration(seconds: 3),
-  });
-
-  /// 顶部提示：展示 [type]；[autoHide] 到期后自动清除，为空表示保持到显式清除。
-  void showTopIndicator(
-    VideoControlsIndicatorType type, {
-    Duration? autoHide = const Duration(seconds: 3),
-  });
-
-  /// 清除顶部提示。
-  void clearTopIndicator();
-
+/// 播放会话所需的加载指示器操作。
+abstract interface class PlaybackIndicatorActions {
   /// 居中指示器，可长期驻留（解析、缓冲、拖动进度）。
   void showCenterIndicator(VideoControlsIndicatorType type);
 
   /// 清除居中指示器。
   void clearCenterIndicator();
 
-  VideoControlsIndicatorType get topIndicator;
-
   VideoControlsIndicatorType get centerIndicator;
 }
 
-extension PlaybackLoadingIndicators on VideoUiStateActions {
+extension PlaybackLoadingIndicators on PlaybackIndicatorActions {
   void showParsingIndicator() =>
       showCenterIndicator(VideoControlsIndicatorType.parsingIndicator);
 
@@ -129,7 +115,8 @@ class VideoUiState {
 
 // Keep controls alive while hidden, but own them in the playback route scope.
 @Riverpod(keepAlive: true, dependencies: [playExtra])
-class VideoUiNotifier extends _$VideoUiNotifier implements VideoUiStateActions {
+class VideoUiNotifier extends _$VideoUiNotifier
+    implements PlaybackIndicatorActions {
   Timer? _topIndicatorTimer;
   Timer? _controlsUiTimer;
   Timer? _timeUpdateTimer;
@@ -148,7 +135,6 @@ class VideoUiNotifier extends _$VideoUiNotifier implements VideoUiStateActions {
   bool get isShowControlsUi => state.isShowControlsUi;
   bool get isHorizontalDragging => state.isHorizontalDragging;
   Duration get dragPosition => state.dragPosition;
-  @override
   VideoControlsIndicatorType get topIndicator => state.topIndicator;
   @override
   VideoControlsIndicatorType get centerIndicator => state.centerIndicator;
@@ -234,7 +220,6 @@ class VideoUiNotifier extends _$VideoUiNotifier implements VideoUiStateActions {
     } catch (_) {}
   }
 
-  @override
   void showTopIndicator(
     VideoControlsIndicatorType type, {
     Duration? autoHide = const Duration(seconds: 3),
@@ -249,7 +234,6 @@ class VideoUiNotifier extends _$VideoUiNotifier implements VideoUiStateActions {
     }
   }
 
-  @override
   void clearTopIndicator() {
     _topIndicatorTimer?.cancel();
     _topIndicatorTimer = null;
@@ -283,7 +267,6 @@ class VideoUiNotifier extends _$VideoUiNotifier implements VideoUiStateActions {
     state = state.copyWith(isShowControlsUi: true);
   }
 
-  @override
   void restartControlsAutoHideTimer({
     Duration duration = const Duration(seconds: 3),
   }) {
@@ -364,7 +347,7 @@ class VideoUiNotifier extends _$VideoUiNotifier implements VideoUiStateActions {
   void endHorizontalDrag() {
     if (state.isHorizontalDragging) {
       state = state.copyWith(isHorizontalDragging: false);
-      hideControlsUi(duration: const Duration(seconds: 1));
+      restartControlsAutoHideTimer();
     }
   }
 

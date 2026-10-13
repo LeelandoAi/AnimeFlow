@@ -24,7 +24,6 @@ class DesktopGestureDetector extends ConsumerStatefulWidget {
 
 class _DesktopGestureDetectorState
     extends ConsumerState<DesktopGestureDetector> {
-  Timer? hoverTimer;
   final _focusNode = FocusNode(debugLabel: 'Desktop player');
   late final PlaySession playSession;
   late final VideoUiNotifier videoUiNotifier;
@@ -40,7 +39,6 @@ class _DesktopGestureDetectorState
 
   @override
   void dispose() {
-    hoverTimer?.cancel();
     _fastForwardPendingTimer?.cancel();
     _endTemporaryFastForward();
     _focusNode.dispose();
@@ -121,11 +119,7 @@ class _DesktopGestureDetectorState
           (currentPosition - const Duration(seconds: 10)).inMilliseconds;
       final clampedMs = newPositionMs.clamp(0, duration.inMilliseconds);
       playSession.seekTo(Duration(milliseconds: clampedMs));
-      hoverTimer?.cancel();
-      videoUiNotifier.showControlsUi();
-      hoverTimer = Timer(const Duration(seconds: 3), () {
-        videoUiNotifier.hideControlsUi();
-      });
+      videoUiNotifier.restartControlsAutoHideTimer();
       return KeyEventResult.handled;
     }
     // 右方向键：快进10秒
@@ -137,11 +131,7 @@ class _DesktopGestureDetectorState
           (currentPosition + const Duration(seconds: 10)).inMilliseconds;
       final clampedMs = newPositionMs.clamp(0, duration.inMilliseconds);
       playSession.seekTo(Duration(milliseconds: clampedMs));
-      hoverTimer?.cancel();
-      videoUiNotifier.showControlsUi();
-      hoverTimer = Timer(const Duration(seconds: 3), () {
-        videoUiNotifier.hideControlsUi();
-      });
+      videoUiNotifier.restartControlsAutoHideTimer();
       return KeyEventResult.handled;
     }
     // 上方向键：增加音量
@@ -228,16 +218,11 @@ class _DesktopGestureDetectorState
 
           // 鼠标悬停事件
           onHover: (event) {
-            hoverTimer?.cancel();
-            videoUiNotifier.showControlsUi();
-            hoverTimer = Timer(const Duration(seconds: 3), () {
-              videoUiNotifier.hideControlsUi();
-            });
+            videoUiNotifier.restartControlsAutoHideTimer();
           },
 
           // 鼠标移出事件
           onExit: (event) {
-            hoverTimer?.cancel();
             videoUiNotifier.hideControlsUi(
                 duration: const Duration(seconds: 3));
           },

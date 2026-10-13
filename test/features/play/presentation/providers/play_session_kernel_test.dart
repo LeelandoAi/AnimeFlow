@@ -287,7 +287,7 @@ class _Session extends PlaySession {
       : super(
           shadersDirectory: Directory.systemTemp,
           playStateActions: state ?? _State(),
-          videoUiStateActions: _Ui(),
+          playbackIndicatorActions: _Indicators(),
           episodesActions: _Episodes(),
           danmaku: DanmakuSession(
             store: _DanmakuStore(),
@@ -430,13 +430,20 @@ class _State implements PlayStateNotifier {
   dynamic noSuchMethod(Invocation invocation) => null;
 }
 
-class _Ui implements VideoUiStateActions {
+class _Indicators implements PlaybackIndicatorActions {
   @override
-  VideoControlsIndicatorType get centerIndicator =>
+  VideoControlsIndicatorType centerIndicator =
       VideoControlsIndicatorType.noIndicator;
 
   @override
-  dynamic noSuchMethod(Invocation invocation) => null;
+  void showCenterIndicator(VideoControlsIndicatorType type) {
+    centerIndicator = type;
+  }
+
+  @override
+  void clearCenterIndicator() {
+    centerIndicator = VideoControlsIndicatorType.noIndicator;
+  }
 }
 
 class _Episodes implements Episodes {

@@ -467,6 +467,7 @@ class _SkipButton extends ConsumerWidget {
           ref.read(playSessionProvider).seekTo(
                 position + Duration(seconds: skipDuration),
               );
+          ref.read(videoUiProvider.notifier).restartControlsAutoHideTimer();
         },
         icon: SvgPicture.asset(
           AssetsPathConstants.blockGrove,

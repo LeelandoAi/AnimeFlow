@@ -12,23 +12,21 @@ class PlayerTimeDisplay extends ConsumerWidget {
     final isHorizontalDragging = ref.watch(
       videoUiProvider.select((state) => state.isHorizontalDragging),
     );
-    final dragPosition = ref.watch(
-      videoUiProvider.select((state) => state.dragPosition),
+    final positionSeconds = isHorizontalDragging
+        ? ref.watch(
+            videoUiProvider.select((state) => state.dragPosition.inSeconds))
+        : ref.watch(
+            playStateProvider.select((state) => state.position.inSeconds));
+    final durationSeconds = ref.watch(
+      playStateProvider.select((state) => state.duration.inSeconds),
     );
-    final playState = ref.watch(playStateProvider);
-
-    return Builder(builder: (context) {
-      final position = isHorizontalDragging ? dragPosition : playState.position;
-      final duration = playState.duration;
-
-      return Text(
-        "${FormatTimeUtil.formatDuration(position)} / ${FormatTimeUtil.formatDuration(duration)}",
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w800,
-        ),
-      );
-    });
+    return Text(
+      "${FormatTimeUtil.formatDuration(Duration(seconds: positionSeconds))} / ${FormatTimeUtil.formatDuration(Duration(seconds: durationSeconds))}",
+      style: const TextStyle(
+        color: Colors.white,
+        fontSize: 12,
+        fontWeight: FontWeight.w800,
+      ),
+    );
   }
 }

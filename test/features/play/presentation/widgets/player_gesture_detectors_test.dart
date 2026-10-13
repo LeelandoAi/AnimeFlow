@@ -7,6 +7,7 @@ import 'package:anime_flow/features/play/presentation/widgets/player/gesture/mob
 import 'package:anime_flow/features/play/presentation/widgets/player/ui/control/middle_area_control.dart';
 import 'package:anime_flow/shared/models/enums/video_controls_icon_type.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -20,6 +21,35 @@ const _extra = PlayRouteExtra(
 );
 
 void main() {
+  testWidgets('control interactions replace the desktop hover hide deadline',
+      (tester) async {
+    final container = _container(_Session());
+    addTearDown(container.dispose);
+    final ui = container.read(videoUiProvider.notifier);
+    await tester.pumpWidget(_app(
+      container,
+      const DesktopGestureDetector(child: MiddleAreaControl()),
+    ));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    final center = tester.getCenter(find.byType(MiddleAreaControl));
+    await mouse.addPointer(location: center);
+    await mouse.moveTo(center + const Offset(10, 0));
+    await tester.pump(const Duration(seconds: 2));
+
+    ui.restartControlsAutoHideTimer();
+    await tester.pump(const Duration(milliseconds: 1100));
+    expect(container.read(videoUiProvider).isShowControlsUi, isTrue);
+    await tester.pump(const Duration(seconds: 2));
+    expect(container.read(videoUiProvider).isShowControlsUi, isFalse);
+
+    await mouse.moveTo(center + const Offset(20, 0));
+    ui.cancelUiTimer();
+    await tester.pump(const Duration(seconds: 4));
+    expect(container.read(videoUiProvider).isShowControlsUi, isTrue);
+    await mouse.removePointer();
+    ui.cancelUiTimer();
+  });
+
   testWidgets('mobile gestures stay active above the indicator layer',
       (tester) async {
     final session = _Session();
@@ -120,5 +150,8 @@ class _Session implements PlaySession {
 
 class _TestVideoUiNotifier extends VideoUiNotifier {
   @override
-  VideoUiState build() => const VideoUiState();
+  VideoUiState build() {
+    ref.onDispose(cancelUiTimer);
+    return const VideoUiState();
+  }
 }

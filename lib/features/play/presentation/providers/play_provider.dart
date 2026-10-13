@@ -71,7 +71,7 @@ PlaySession playSession(Ref ref) {
   final controller = PlaySession(
     shadersDirectory: ref.watch(shadersDirectoryProvider).requireValue,
     playStateActions: playStateActions,
-    videoUiStateActions: ref.watch(videoUiProvider.notifier),
+    playbackIndicatorActions: ref.watch(videoUiProvider.notifier),
     episodesActions: ref.watch(episodesProvider.notifier),
     danmaku: danmaku,
     engineFactory: const PlayerEngineFactory(),
@@ -336,7 +336,7 @@ class PlaySession {
   PlaySession({
     required this.shadersDirectory,
     required PlayStateNotifier playStateActions,
-    required VideoUiStateActions videoUiStateActions,
+    required PlaybackIndicatorActions playbackIndicatorActions,
     required Episodes episodesActions,
     required this.danmaku,
     required this.engineFactory,
@@ -346,7 +346,7 @@ class PlaySession {
       required bool watched,
     }) setEpisodeWatched,
   })  : _playStateActions = playStateActions,
-        _videoUiStateActions = videoUiStateActions,
+        _playbackIndicatorActions = playbackIndicatorActions,
         _episodesActions = episodesActions,
         _setEpisodeWatched = setEpisodeWatched;
 
@@ -354,7 +354,7 @@ class PlaySession {
   late final PlaybackCoordinator playbackCoordinator;
   late final PlaybackProgressManager playbackProgressManager;
   final PlayStateNotifier _playStateActions;
-  final VideoUiStateActions _videoUiStateActions;
+  final PlaybackIndicatorActions _playbackIndicatorActions;
   final Episodes _episodesActions;
   final DanmakuSession danmaku;
   final void Function({
@@ -623,7 +623,7 @@ class PlaySession {
         nextPhase == PlaybackPhase.buffering ||
         nextPhase == PlaybackPhase.paused ||
         nextPhase == PlaybackPhase.completed) {
-      _videoUiStateActions.finishParsingIndicator();
+      _playbackIndicatorActions.finishParsingIndicator();
     }
   }
 
@@ -744,7 +744,7 @@ class PlaySession {
 
   void _handlePlayStateChanged(PlayState state, {required bool isLoggedIn}) {
     if (state.phase.keepsStartupIndicator) {
-      _videoUiStateActions.showParsingIndicator();
+      _playbackIndicatorActions.showParsingIndicator();
     }
     playbackProgressManager.updatePlaybackState(
       position: state.position,
@@ -764,7 +764,7 @@ class PlaySession {
 
   ///更新缓冲状态
   void _updateBufferingState(bool buffering) {
-    _videoUiStateActions.updateBufferingIndicator(
+    _playbackIndicatorActions.updateBufferingIndicator(
       buffering,
       isParsing: _playStateActions.value.phase.isResolving,
     );
