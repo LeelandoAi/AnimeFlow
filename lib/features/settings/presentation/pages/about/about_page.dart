@@ -177,6 +177,13 @@ class _AboutSettingsPageState extends ConsumerState<AboutSettingsPage> {
                           ),
                           const Divider(),
                           ListTile(
+                            title: Text(l10n.projectWebsite),
+                            trailing: const Icon(Icons.public_outlined),
+                            onTap: () =>
+                                const SettingWebsiteRoute().push(context),
+                          ),
+                          const Divider(),
+                          ListTile(
                             title: Text(l10n.openSource),
                             trailing: const Icon(Icons.open_in_new),
                             onTap: () async {

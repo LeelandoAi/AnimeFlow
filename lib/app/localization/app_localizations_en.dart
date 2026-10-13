@@ -938,6 +938,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get projectUpdates => 'Update information';
 
   @override
+  String get projectWebsite => 'Project website';
+
+  @override
+  String get websiteWindowOpened => 'The website is open in a separate window';
+
+  @override
+  String get openWebsiteWindow => 'Open website window';
+
+  @override
   String get projectUpdatesLoadFailed => 'Failed to load update information';
 
   @override

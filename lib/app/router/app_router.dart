@@ -23,6 +23,7 @@ import 'package:anime_flow/features/settings/presentation/pages/about/about_page
 import 'package:anime_flow/features/settings/presentation/pages/about/thanks_page.dart';
 import 'package:anime_flow/features/settings/presentation/pages/about/sponsor_page.dart';
 import 'package:anime_flow/features/settings/presentation/pages/about/updates_page.dart';
+import 'package:anime_flow/features/settings/presentation/pages/about/website_page.dart';
 import 'package:anime_flow/features/settings/presentation/pages/agreement_page.dart';
 import 'package:anime_flow/features/settings/presentation/pages/danmaku_setting_page.dart';
 import 'package:anime_flow/features/settings/presentation/pages/download_settings.dart';
@@ -408,6 +409,7 @@ class ImagePreviewRoute extends GoRouteData with $ImagePreviewRoute {
       TypedGoRoute<SettingDownloadRoute>(path: 'download'),
       TypedGoRoute<SettingAboutRoute>(path: 'about'),
       TypedGoRoute<SettingUpdatesRoute>(path: 'updates'),
+      TypedGoRoute<SettingWebsiteRoute>(path: 'website'),
       TypedGoRoute<SettingPluginsRoute>(path: 'Plugins'),
       TypedGoRoute<SettingAddPluginsRoute>(path: 'addPlugins'),
       TypedGoRoute<SettingThemeRoute>(path: 'theme'),
@@ -506,6 +508,13 @@ class SettingAboutRoute extends GoRouteData with $SettingAboutRoute {
   @override
   Widget build(BuildContext context, GoRouterState state) =>
       const AboutSettingsPage();
+}
+
+class SettingWebsiteRoute extends GoRouteData with $SettingWebsiteRoute {
+  const SettingWebsiteRoute();
+
+  @override
+  Widget build(BuildContext context, GoRouterState state) => const WebsitePage();
 }
 
 class SettingUpdatesRoute extends GoRouteData with $SettingUpdatesRoute {

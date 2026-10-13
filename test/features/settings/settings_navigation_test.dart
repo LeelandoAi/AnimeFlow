@@ -48,6 +48,9 @@ class _ProbeState extends ConsumerState<_Probe> {
               onPressed: () => const SettingFontRoute().push(context),
               child: const Text('Open font')),
           TextButton(
+              onPressed: () => const SettingWebsiteRoute().push(context),
+              child: const Text('Open website')),
+          TextButton(
               onPressed: () => Navigator.of(context).pop(true),
               child: const Text('Return result')),
         ]),
@@ -193,6 +196,22 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Enter settings'), findsOneWidget);
     expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('website route keeps about selected and returns to about',
+      (tester) async {
+    await mount(tester, initial: '/settings/about');
+    await tester.tap(find.text('Open website'));
+    await tester.pumpAndSettle();
+    expect(find.text('probe:/settings/website'), findsOneWidget);
+    final aboutTile = tester.widget<ListTile>(find.ancestor(
+      of: find.text(l10n(tester).about),
+      matching: find.byType(ListTile),
+    ));
+    expect(aboutTile.selected, isTrue);
+    await tester.binding.handlePopRoute();
+    await tester.pumpAndSettle();
+    expect(find.text('probe:/settings/about'), findsOneWidget);
   });
 
   testWidgets('child navigation returns values to caller', (tester) async {

@@ -921,6 +921,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get projectUpdates => '更新信息';
 
   @override
+  String get projectWebsite => '项目官网';
+
+  @override
+  String get websiteWindowOpened => '官网已在独立窗口中打开';
+
+  @override
+  String get openWebsiteWindow => '打开官网窗口';
+
+  @override
   String get projectUpdatesLoadFailed => '更新信息加载失败';
 
   @override
@@ -3310,6 +3319,15 @@ class AppLocalizationsZhHans extends AppLocalizationsZh {
 
   @override
   String get projectUpdates => '更新信息';
+
+  @override
+  String get projectWebsite => '项目官网';
+
+  @override
+  String get websiteWindowOpened => '官网已在独立窗口中打开';
+
+  @override
+  String get openWebsiteWindow => '打开官网窗口';
 
   @override
   String get projectUpdatesLoadFailed => '更新信息加载失败';
@@ -5702,6 +5720,15 @@ class AppLocalizationsZhHantHk extends AppLocalizationsZh {
   String get projectUpdates => '更新資訊';
 
   @override
+  String get projectWebsite => '項目官網';
+
+  @override
+  String get websiteWindowOpened => '官網已在獨立視窗中開啟';
+
+  @override
+  String get openWebsiteWindow => '開啟官網視窗';
+
+  @override
   String get projectUpdatesLoadFailed => '更新資訊載入失敗';
 
   @override
@@ -8091,6 +8118,15 @@ class AppLocalizationsZhHantTw extends AppLocalizationsZh {
 
   @override
   String get projectUpdates => '更新資訊';
+
+  @override
+  String get projectWebsite => '專案官網';
+
+  @override
+  String get websiteWindowOpened => '官網已在獨立視窗中開啟';
+
+  @override
+  String get openWebsiteWindow => '開啟官網視窗';
 
   @override
   String get projectUpdatesLoadFailed => '更新資訊載入失敗';

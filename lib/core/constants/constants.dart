@@ -13,7 +13,10 @@ class Constants {
       bangumiUserAgent = 'AnimeFlow/{version} (https://github.com/openAnimeFlow/AnimeFlow.git)',
 
       /// AnimeFlow GitHub地址
-      animeFlow = 'https://github.com/openAnimeFlow/AnimeFlow';
+      animeFlow = 'https://github.com/openAnimeFlow/AnimeFlow',
+
+      /// AnimeFlow
+      animeFlowWebsite = 'https://ligg.top';
 }
 
 /// 随机UA列表

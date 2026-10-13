@@ -738,6 +738,11 @@ RouteBase get $settingsShellRoute => ShellRouteData.$route(
               factory: $SettingUpdatesRoute._fromState,
             ),
             GoRouteData.$route(
+              path: 'website',
+              hasOverriddenOnExit: false,
+              factory: $SettingWebsiteRoute._fromState,
+            ),
+            GoRouteData.$route(
               path: 'Plugins',
               hasOverriddenOnExit: false,
               factory: $SettingPluginsRoute._fromState,
@@ -1018,6 +1023,29 @@ mixin $SettingUpdatesRoute on GoRouteData {
   @override
   String get location => GoRouteData.$location(
         '/settings/updates',
+      );
+
+  @override
+  void go(BuildContext context) => context.go(location);
+
+  @override
+  Future<T?> push<T>(BuildContext context) => context.push<T>(location);
+
+  @override
+  void pushReplacement(BuildContext context) =>
+      context.pushReplacement(location);
+
+  @override
+  void replace(BuildContext context) => context.replace(location);
+}
+
+mixin $SettingWebsiteRoute on GoRouteData {
+  static SettingWebsiteRoute _fromState(GoRouterState state) =>
+      const SettingWebsiteRoute();
+
+  @override
+  String get location => GoRouteData.$location(
+        '/settings/website',
       );
 
   @override

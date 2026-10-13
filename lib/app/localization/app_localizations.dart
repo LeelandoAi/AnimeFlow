@@ -1808,6 +1808,24 @@ abstract class AppLocalizations {
   /// **'更新信息'**
   String get projectUpdates;
 
+  /// No description provided for @projectWebsite.
+  ///
+  /// In zh_Hans, this message translates to:
+  /// **'项目官网'**
+  String get projectWebsite;
+
+  /// No description provided for @websiteWindowOpened.
+  ///
+  /// In zh_Hans, this message translates to:
+  /// **'官网已在独立窗口中打开'**
+  String get websiteWindowOpened;
+
+  /// No description provided for @openWebsiteWindow.
+  ///
+  /// In zh_Hans, this message translates to:
+  /// **'打开官网窗口'**
+  String get openWebsiteWindow;
+
   /// No description provided for @projectUpdatesLoadFailed.
   ///
   /// In zh_Hans, this message translates to:
