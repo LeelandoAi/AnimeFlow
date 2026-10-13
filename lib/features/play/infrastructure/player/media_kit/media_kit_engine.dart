@@ -13,10 +13,9 @@ import 'package:media_kit_video/media_kit_video.dart';
 
 class MediaKitEngine implements PlayerEngine {
   final bool adBlocker;
+  final bool hardwareDecoder;
   late Player _player;
   final ValueNotifier<VideoController?> _videoController = ValueNotifier(null);
-  final Player Function() _playerFactory;
-  final VideoController Function(Player) _controllerFactory;
   late final _operations = PlayerOperationQueue(ensureReady: _ensureReady);
   bool _opened = false;
   bool _released = true;
@@ -31,20 +30,8 @@ class MediaKitEngine implements PlayerEngine {
 
   MediaKitEngine({
     required this.adBlocker,
-    bool hardwareDecoder = true,
-    Player Function()? playerFactory,
-    VideoController Function(Player)? controllerFactory,
-  })  : _playerFactory = playerFactory ??
-            (() => Player(
-                configuration: PlayerConfiguration(adBlocker: adBlocker))),
-        _controllerFactory = controllerFactory ??
-            ((player) => VideoController(
-                  player,
-                  configuration: VideoControllerConfiguration(
-                    enableHardwareAcceleration: hardwareDecoder,
-                    hwdec: hardwareDecoder ? null : 'no',
-                  ),
-                )) {
+    this.hardwareDecoder = true,
+  }) {
     _createPlayer();
   }
 
@@ -69,9 +56,15 @@ class MediaKitEngine implements PlayerEngine {
   }
 
   void _createPlayer() {
-    _player = _playerFactory();
+    _player = Player(configuration: PlayerConfiguration(adBlocker: adBlocker));
     _released = false;
-    _videoController.value = _controllerFactory(_player);
+    _videoController.value = VideoController(
+      _player,
+      configuration: VideoControllerConfiguration(
+        enableHardwareAcceleration: hardwareDecoder,
+        hwdec: hardwareDecoder ? null : 'no',
+      ),
+    );
     _subscriptions.addAll([
       _player.stream.playing.listen(
         (value) => _emit(PlayerPlayingChanged(value)),

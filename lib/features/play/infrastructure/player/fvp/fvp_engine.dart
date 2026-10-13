@@ -16,10 +16,8 @@ import 'package:material_ui/material_ui.dart';
 /// This intentionally uses the backend API instead of fvp.registerWith(), so
 /// MediaKit and FVP can coexist as explicitly selected engines.
 class FvpEngine implements PlayerEngine {
-  FvpEngine({fvp.Player Function()? playerFactory, this.hardwareDecoder = true})
-      : _playerFactory = playerFactory ?? fvp.Player.new;
+  FvpEngine({this.hardwareDecoder = true});
 
-  final fvp.Player Function() _playerFactory;
   final bool hardwareDecoder;
 
   // FVP defaults to a 4-second decoded-data buffer. On longer videos that is
@@ -70,7 +68,7 @@ class FvpEngine implements PlayerEngine {
   }
 
   void _createPlayer() {
-    _player = _playerFactory();
+    _player = fvp.Player();
     // Follow FVP 0.38.1's platform priorities with software fallback.
     _player.videoDecoders = [
       if (hardwareDecoder) ..._preferredDecoders(),
