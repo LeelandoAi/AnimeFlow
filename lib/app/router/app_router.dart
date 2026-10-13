@@ -54,6 +54,8 @@ import 'model/play_route_extra.dart';
 
 part 'app_router.g.dart';
 
+final GlobalKey<NavigatorState> rootNavigatorKey = GlobalKey<NavigatorState>(debugLabel: 'root');
+
 @TypedStatefulShellRoute<MainShellRoute>(
   branches: [
     TypedStatefulShellBranch<RecommendBranch>(
@@ -69,9 +71,6 @@ part 'app_router.g.dart';
 )
 class MainShellRoute extends StatefulShellRouteData {
   const MainShellRoute();
-
-  static final GlobalKey<NavigatorState> $navigatorKey =
-      GlobalKey<NavigatorState>();
 
   @override
   Widget builder(
@@ -594,7 +593,7 @@ class SettingAgreementRoute extends GoRouteData with $SettingAgreementRoute {
 // GoRouter 实例
 // =====================================================================
 final GoRouter appRouter = GoRouter(
-  navigatorKey: MainShellRoute.$navigatorKey,
+  navigatorKey: rootNavigatorKey,
   observers: [BotToastNavigatorObserver(), appRouteObserver],
   initialLocation: const RecommendRoute().location,
   redirect: (context, state) {

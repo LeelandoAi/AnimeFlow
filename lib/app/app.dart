@@ -25,10 +25,7 @@ class MyApp extends StatelessWidget {
         return MaterialApp.router(
           key: ValueKey(fontFamily),
           debugShowCheckedModeBanner: false,
-          routeInformationProvider: appRouter.routeInformationProvider,
-          routeInformationParser: appRouter.routeInformationParser,
-          routerDelegate: appRouter.routerDelegate,
-          backButtonDispatcher: appRouter.backButtonDispatcher,
+          routerConfig: appRouter,
           theme: buildLightTheme(themeState.seedColor, fontFamily: fontFamily),
           darkTheme:
               buildDarkTheme(themeState.seedColor, fontFamily: fontFamily),
