@@ -11,4 +11,5 @@ final List<LocalizationsDelegate<dynamic>> appLocalizationsDelegates =
   AppLocalizations.delegate,
   ...GlobalMaterialLocalizations.delegates,
   flutter_localizations.GlobalMaterialLocalizations.delegate,
+  flutter_localizations.GlobalCupertinoLocalizations.delegate,
 ];
