@@ -506,8 +506,29 @@ class InfoHeadView extends StatelessWidget {
                       return Align(
                         alignment: Alignment.bottomCenter,
                         child: Tooltip(
-                          message:
-                              '${index + 1} ★ · ${l10n.ratingCount(value)}',
+                          richMessage: TextSpan(
+                            children: [
+                              TextSpan(
+                                text: '${index + 1} ',
+                                semanticsLabel: '${index + 1}/10 ',
+                              ),
+                              WidgetSpan(
+                                alignment: PlaceholderAlignment.middle,
+                                child: ExcludeSemantics(
+                                  child: Icon(
+                                    Icons.star_rounded,
+                                    size: 14 * layoutScale,
+                                    color: Theme.of(context)
+                                            .tooltipTheme
+                                            .textStyle
+                                            ?.color ??
+                                        colors.onInverseSurface,
+                                  ),
+                                ),
+                              ),
+                              TextSpan(text: ' · ${l10n.ratingCount(value)}'),
+                            ],
+                          ),
                           preferBelow: false,
                           // 锚点取实际柱体和票数标签的中心，向上偏移至标签顶部。
                           verticalOffset:
