@@ -127,7 +127,10 @@ class _Danmaku implements DanmakuSession {
 
 class _VideoUi extends VideoUiNotifier {
   @override
-  VideoUiState build() => const VideoUiState();
+  VideoUiState build() {
+    ref.onDispose(cancelUiTimer);
+    return const VideoUiState();
+  }
 
   @override
   void showTopIndicator(
