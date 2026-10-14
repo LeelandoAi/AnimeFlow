@@ -231,7 +231,7 @@ class InfoHeadView extends StatelessWidget {
       IconData icon,
       VoidCallback onPressed,
     ) {
-      return OutlinedButton.icon(
+      return FilledButton.icon(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
           minimumSize: const Size(100, 0),
