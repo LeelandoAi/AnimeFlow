@@ -34,11 +34,27 @@ class _AnimeInfoViewState extends State<AnimeInfoView> {
 
   @override
   Widget build(BuildContext context) {
+    // 同一尺寸档位内复用页面；状态或组件更新时重新创建缓存，保持内容最新。
+    Widget? page;
+    double? previousHeight;
+    double? previousTopPadding;
     return LayoutBuilder(
       builder: (context, constraints) {
-        final contentHeight =
-            (constraints.maxWidth * 0.25).clamp(200.0, 450.0).toDouble();
-        return _buildAnimeInfoPage(context, contentHeight);
+        final contentHeight = switch (constraints.maxWidth) {
+          >= 1440 => 450.0,
+          >= 1100 => 340.0,
+          >= 840 => 260.0,
+          _ => 200.0,
+        };
+        final topPadding = MediaQuery.paddingOf(context).top;
+        if (page == null ||
+            previousHeight != contentHeight ||
+            previousTopPadding != topPadding) {
+          previousHeight = contentHeight;
+          previousTopPadding = topPadding;
+          page = _buildAnimeInfoPage(context, contentHeight);
+        }
+        return page!;
       },
     );
   }
