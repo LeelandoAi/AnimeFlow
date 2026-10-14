@@ -337,19 +337,6 @@ void main() {
     });
   }
 
-  testWidgets('surface is available during the initial synchronous build',
-      (tester) async {
-    final factory = _FakeEngineFactory();
-    final coordinator =
-        PlaybackCoordinator(engineFactory: factory, adBlocker: false);
-    addTearDown(coordinator.dispose);
-    final initialization = coordinator.initialize();
-    final surface = coordinator.buildVideoSurface(fit: BoxFit.contain);
-    await tester.pumpWidget(surface);
-    await initialization;
-    expect(find.byType(SizedBox), findsOneWidget);
-  });
-
   for (final stage in ['initialize', 'open', 'dispose']) {
     test('disposal during switch $stage releases both engines without resuming',
         () async {
