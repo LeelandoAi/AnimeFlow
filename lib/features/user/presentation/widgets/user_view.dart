@@ -149,22 +149,40 @@ class _UserViewState extends ConsumerState<UserView>
       });
     });
     final tabs = _buildTabs(context);
+    // 同一尺寸档位内复用页面；用户信息、标签或显示状态更新时重新创建缓存。
+    Widget? page;
+    double? previousHeight;
+    double? previousTopPadding;
+    ThemeData? previousTheme;
     return LayoutBuilder(
-      builder: (context, constraints) => _buildUserPage(
-        context,
-        tabs,
-        constraints.maxWidth,
-      ),
+      builder: (context, constraints) {
+        final contentHeight = switch (constraints.maxWidth) {
+          >= 1440 => 430.0,
+          >= 1100 => 320.0,
+          >= 840 => 260.0,
+          _ => 200.0,
+        };
+        final topPadding = MediaQuery.paddingOf(context).top;
+        final theme = Theme.of(context);
+        if (page == null ||
+            previousHeight != contentHeight ||
+            previousTopPadding != topPadding ||
+            previousTheme != theme) {
+          previousHeight = contentHeight;
+          previousTopPadding = topPadding;
+          previousTheme = theme;
+          page = _buildUserPage(context, tabs, contentHeight);
+        }
+        return page!;
+      },
     );
   }
 
   Widget _buildUserPage(
     BuildContext context,
     List<String> tabs,
-    double availableWidth,
+    double contentHeight,
   ) {
-    final contentHeight =
-        (availableWidth * 0.25).clamp(200.0, 360.0).toDouble();
     final statusBarHeight = MediaQuery.paddingOf(context).top;
     return Scaffold(
       bottomNavigationBar: const CollectionSyncPendingBanner(),
@@ -205,7 +223,7 @@ class _UserViewState extends ConsumerState<UserView>
                     collapseMode: CollapseMode.pin,
                     background: Padding(
                       padding: const EdgeInsets.only(bottom: 20),
-                      child: _buildHeaderContent(statusBarHeight),
+                      child: _buildHeaderContent(),
                     ),
                   ),
                   bottom: TabBar(
@@ -448,7 +466,7 @@ class _UserViewState extends ConsumerState<UserView>
     );
   }
 
-  Widget _buildHeaderContent(double statusBarHeight) {
+  Widget _buildHeaderContent() {
     final user = widget.user;
     final l10n = AppLocalizations.of(context);
     final hasAvatar = user.avatar != null && user.avatar!.isNotEmpty;
