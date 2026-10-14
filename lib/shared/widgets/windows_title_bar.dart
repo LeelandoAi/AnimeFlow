@@ -124,13 +124,14 @@ class _WindowsTitleBarState extends State<WindowsTitleBar> with WindowListener {
 
   Widget _buildTitleBar(BuildContext context, ColorScheme colorScheme) {
     final title = widget.title;
+    final theme = Theme.of(context);
     return Container(
       height: widget.height,
       decoration: BoxDecoration(
         color: widget.backgroundColor ?? colorScheme.surfaceContainerHighest,
         border: Border(
           bottom: BorderSide(
-            color: Theme.of(context).dividerColor.withValues(alpha: 0.12),
+            color: theme.dividerColor.withValues(alpha: 0.12),
             width: 1,
           ),
         ),
@@ -147,7 +148,7 @@ class _WindowsTitleBarState extends State<WindowsTitleBar> with WindowListener {
                   if (title != null)
                     Text(
                       title,
-                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      style: theme.textTheme.titleSmall?.copyWith(
                             color: colorScheme.onSurface.withValues(alpha: 0.8),
                           ),
                       maxLines: 1,
