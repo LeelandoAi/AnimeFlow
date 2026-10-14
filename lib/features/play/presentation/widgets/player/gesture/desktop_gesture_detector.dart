@@ -103,14 +103,14 @@ class _DesktopGestureDetectorState
           ? KeyEventResult.handled
           : KeyEventResult.ignored;
     }
-    // 空格键：暂停/播放
+    // 暂停/播放
     if (shortcut[PlayerShortcutAction.playPause]!.contains(pressed)) {
       if (!playSession.playOrPauseVideo()) return KeyEventResult.handled;
       videoUiNotifier
           .showTopIndicator(VideoControlsIndicatorType.playStatusIndicator);
       return KeyEventResult.handled;
     }
-    // 左方向键：快退10秒
+    // 快退 10 秒
     if (shortcut[PlayerShortcutAction.seekBackward]!.contains(pressed)) {
       final playState = ref.read(playStateProvider);
       final currentPosition = playState.position;
@@ -122,7 +122,7 @@ class _DesktopGestureDetectorState
       videoUiNotifier.restartControlsAutoHideTimer();
       return KeyEventResult.handled;
     }
-    // 右方向键：快进10秒
+    // 快进 10 秒
     if (shortcut[PlayerShortcutAction.seekForward]!.contains(pressed)) {
       final playState = ref.read(playStateProvider);
       final currentPosition = playState.position;
@@ -134,14 +134,14 @@ class _DesktopGestureDetectorState
       videoUiNotifier.restartControlsAutoHideTimer();
       return KeyEventResult.handled;
     }
-    // 上方向键：增加音量
+    // 增加音量
     if (shortcut[PlayerShortcutAction.volumeUp]!.contains(pressed)) {
       videoUiNotifier
           .showTopIndicator(VideoControlsIndicatorType.volumeIndicator);
       playSession.adjustVolumeByWheel(5.0); // 每次增加5%
       return KeyEventResult.handled;
     }
-    // 下方向键：减少音量
+    // 减少音量
     if (shortcut[PlayerShortcutAction.volumeDown]!.contains(pressed)) {
       videoUiNotifier
           .showTopIndicator(VideoControlsIndicatorType.volumeIndicator);
