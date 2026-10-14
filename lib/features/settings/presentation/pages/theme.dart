@@ -97,23 +97,20 @@ class _ThemePageState extends State<ThemePage> {
                             GestureDetector(
                               onTap: () =>
                                   themeNotifier.setThemeMode(ThemeMode.system),
-                              child: Container(
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(18),
+                              child: ThemePreviewCard(
+                                bg: const Color(0xFF020617),
+                                primary: Theme.of(context).colorScheme.primary,
+                                titleColor: Colors.white,
+                                subtitleColor: Colors.white60,
+                                icon: Icons.settings,
+                                title: l10n.followSystem,
+                                subtitle: l10n.autoAdapt,
+                                splitColorScheme: ColorScheme.fromSeed(
+                                  seedColor: themeState.seedColor,
+                                  brightness: Brightness.light,
                                 ),
-                                child: ThemePreviewCard(
-                                  bg: const Color(0xFF020617),
-                                  primary:
-                                      Theme.of(context).colorScheme.primary,
-                                  titleColor: Colors.white,
-                                  subtitleColor: Colors.white60,
-                                  icon: Icons.settings,
-                                  title: l10n.followSystem,
-                                  subtitle: l10n.autoAdapt,
-                                  overlay: const DiagonalOverlay(),
-                                  selected:
-                                      themeState.themeMode == ThemeMode.system,
-                                ),
+                                selected:
+                                    themeState.themeMode == ThemeMode.system,
                               ),
                             ),
                           ],

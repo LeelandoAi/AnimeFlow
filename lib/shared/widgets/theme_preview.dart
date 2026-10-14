@@ -9,7 +9,7 @@ class ThemePreviewCard extends StatefulWidget {
   final String subtitle;
   final Color? subtitleColor;
   final bool selected;
-  final Widget? overlay;
+  final ColorScheme? splitColorScheme;
 
   const ThemePreviewCard({
     super.key,
@@ -19,7 +19,7 @@ class ThemePreviewCard extends StatefulWidget {
     required this.title,
     required this.subtitle,
     this.selected = false,
-    this.overlay,
+    this.splitColorScheme,
     this.titleColor,
     this.subtitleColor,
   });
@@ -91,119 +91,142 @@ class _ThemePreviewCardState extends State<ThemePreviewCard>
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          width: 110,
-          height: 160,
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            color: widget.bg,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: widget.selected ? widget.primary : Colors.white24,
-              width: widget.selected ? 2 : 1,
-            ),
-            boxShadow: widget.selected
-                ? [
-                    BoxShadow(
-                      color: widget.primary.withValues(alpha: 0.6),
-                      blurRadius: 16,
-                    )
-                  ]
-                : null,
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Icon(widget.icon, color: widget.primary, size: 28),
-              const SizedBox(height: 16),
-              Text(widget.title,
-                  style: TextStyle(
-                      color: widget.titleColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(widget.subtitle,
-                  style: TextStyle(fontSize: 12, color: widget.subtitleColor)),
-              const Spacer(),
-
-              /// 底部按钮
-              Container(
-                height: 22,
-                decoration: BoxDecoration(
-                  color: widget.primary.withValues(alpha: 0.25),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: AnimatedBuilder(
-                  animation: _animationController,
-                  builder: (context, child) {
-                    // 圆形按钮的透明度（在转换前显示）
-                    final circleOpacity = 1.0 - _scaleAnimation.value;
-                    // 对勾图标的透明度（在转换后显示）
-                    final checkOpacity = _scaleAnimation.value;
-
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        // 圆形按钮（只在需要时显示）
-                        if (circleOpacity > 0.01)
-                          Positioned(
-                            left: _positionAnimation.value,
-                            top: 0,
-                            child: IgnorePointer(
-                              ignoring: circleOpacity < 0.5,
-                              child: Opacity(
-                                opacity: circleOpacity,
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    color: widget.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                        // 对勾图标
-                        if (checkOpacity > 0.01)
-                          Positioned(
-                            left: _positionAnimation.value,
-                            top: 0,
-                            child: IgnorePointer(
-                              ignoring: checkOpacity < 0.5,
-                              child: Opacity(
-                                opacity: checkOpacity,
-                                child: Container(
-                                  width: 22,
-                                  height: 22,
-                                  decoration: BoxDecoration(
-                                    color: widget.primary,
-                                    shape: BoxShape.circle,
-                                  ),
-                                  child: const Icon(
-                                    Icons.check,
-                                    size: 14,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                      ],
-                    );
-                  },
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 200),
+      width: 110,
+      height: 160,
+      decoration: BoxDecoration(
+        color: widget.bg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: widget.selected ? widget.primary : Colors.white24,
+          width: widget.selected ? 2 : 1,
+        ),
+        boxShadow: widget.selected
+            ? [
+                BoxShadow(
+                  color: widget.primary.withValues(alpha: 0.6),
+                  blurRadius: 16,
+                )
+              ]
+            : null,
+      ),
+      // Clip only the preview; the border and shadow stay outside it.
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(widget.selected ? 16 : 17),
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            _buildPreview(),
+            if (widget.splitColorScheme case final colors?)
+              ClipPath(
+                clipper: _DiagonalClipper(),
+                child: IgnorePointer(
+                  child: ExcludeSemantics(
+                    child: _buildPreview(colors: colors),
+                  ),
                 ),
               ),
-            ],
-          ),
+          ],
         ),
+      ),
+    );
+  }
 
-        /// 斜切覆盖
-        if (widget.overlay != null) widget.overlay!,
-      ],
+  Widget _buildPreview({ColorScheme? colors}) {
+    final primary = colors?.primary ?? widget.primary;
+    return ColoredBox(
+      color: colors?.surface ?? widget.bg,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(widget.icon, color: primary, size: 28),
+            const SizedBox(height: 16),
+            Text(widget.title,
+                style: TextStyle(
+                    color: colors?.onSurface ?? widget.titleColor,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            Text(widget.subtitle,
+                style: TextStyle(
+                    fontSize: 12,
+                    color: colors?.onSurfaceVariant ?? widget.subtitleColor)),
+            const Spacer(),
+
+            /// 底部按钮
+            Container(
+              height: 22,
+              decoration: BoxDecoration(
+                color: primary.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: AnimatedBuilder(
+                animation: _animationController,
+                builder: (context, child) {
+                  // 圆形按钮的透明度（在转换前显示）
+                  final circleOpacity = 1.0 - _scaleAnimation.value;
+                  // 对勾图标的透明度（在转换后显示）
+                  final checkOpacity = _scaleAnimation.value;
+
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      // 圆形按钮（只在需要时显示）
+                      if (circleOpacity > 0.01)
+                        Positioned(
+                          left: _positionAnimation.value,
+                          top: 0,
+                          child: IgnorePointer(
+                            ignoring: circleOpacity < 0.5,
+                            child: Opacity(
+                              opacity: circleOpacity,
+                              child: Container(
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  color: primary,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      // 对勾图标
+                      if (checkOpacity > 0.01)
+                        Positioned(
+                          left: _positionAnimation.value,
+                          top: 0,
+                          child: IgnorePointer(
+                            ignoring: checkOpacity < 0.5,
+                            child: Opacity(
+                              opacity: checkOpacity,
+                              child: Container(
+                                width: 22,
+                                height: 22,
+                                decoration: BoxDecoration(
+                                  color: primary,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  Icons.check,
+                                  size: 14,
+                                  color: colors?.onPrimary ?? Colors.white,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -306,29 +329,11 @@ class ThemeColorCard extends StatelessWidget {
       );
 }
 
-class DiagonalOverlay extends StatelessWidget {
-  const DiagonalOverlay({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      child: ClipPath(
-        clipper: _DiagonalClipper(),
-        child: Container(
-          decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(18), color: Colors.white38),
-        ),
-      ),
-    );
-  }
-}
-
 class _DiagonalClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
     return Path()
-      ..moveTo(size.width * 1, 0)
-      ..lineTo(size.width, 0)
+      ..moveTo(size.width, 0)
       ..lineTo(size.width, size.height)
       ..lineTo(0, size.height)
       ..close();
