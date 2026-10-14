@@ -1,6 +1,5 @@
-import 'package:anime_flow/core/network/api/api.dart';
-import 'package:anime_flow/core/utils/utils.dart';
 import 'package:anime_flow/app/localization/app_localizations.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 
 class AgreementPage extends StatefulWidget {
@@ -18,23 +17,24 @@ class _AgreementPageState extends State<AgreementPage> {
   @override
   void initState() {
     super.initState();
-    _fetchLicense();
+    _loadLicense();
   }
 
-  Future<void> _fetchLicense() async {
+  Future<void> _loadLicense() async {
     setState(() {
       _isLoading = true;
       _error = null;
     });
 
     try {
-      final response = await Api.getResources<String>(Utils.jsDelivrCdnUrl(
-          'https://raw.githubusercontent.com/openAnimeFlow/AnimeFlow/main/LICENSE.txt'));
+      final licenseText = await rootBundle.loadString('LICENSE.txt');
+      if (!mounted) return;
       setState(() {
-        _licenseText = response;
+        _licenseText = licenseText;
         _isLoading = false;
       });
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _error = e.toString();
         _isLoading = false;
@@ -89,7 +89,7 @@ class _AgreementPageState extends State<AgreementPage> {
             ),
             const SizedBox(height: 24),
             ElevatedButton.icon(
-              onPressed: _fetchLicense,
+              onPressed: _loadLicense,
               icon: const Icon(Icons.refresh),
               label: Text(l10n.retry),
             ),
