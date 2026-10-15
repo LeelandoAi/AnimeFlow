@@ -51,12 +51,13 @@ class NetworkConfig {
     Duration connectTimeout = const Duration(seconds: 12),
     Duration receiveTimeout = const Duration(seconds: 12),
     Duration? sendTimeout,
+    bool allowBadCertificates = true,
   }) {
     return NetworkConfig(
       connectTimeout: connectTimeout,
       receiveTimeout: receiveTimeout,
       sendTimeout: sendTimeout,
-      allowBadCertificates: true,
+      allowBadCertificates: allowBadCertificates,
     );
   }
 }

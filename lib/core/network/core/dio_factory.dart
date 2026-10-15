@@ -35,6 +35,7 @@ class DioFactory {
       NetworkConfig.fromSettings(
         connectTimeout: const Duration(seconds: 15),
         receiveTimeout: const Duration(seconds: 60),
+        allowBadCertificates: false,
       ),
       baseUrl: AnimeFlowApi.animeFlowApi,
       defaultHeaders: {
