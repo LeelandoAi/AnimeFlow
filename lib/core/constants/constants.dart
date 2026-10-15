@@ -1,6 +1,6 @@
 class Constants {
   ///空image
-  static const String notImage = 'https://bgm.tv/img/info_only.png',
+  static const String notImage = 'https://wsrv.nl/?url=https://bgm.tv/img/info_only.png',
 
       ///常规请求头
       userAgentName = 'User-Agent',
